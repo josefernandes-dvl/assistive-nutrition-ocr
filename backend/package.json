@@ -2,16 +2,20 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "Responsável por: - Processar dados do OCR - Integrar com API de nutrição - Persistir informações no banco de dados",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "axios": "^1.16.1",
     "express": "^5.2.1",
-    "mongoose": "^9.1.5"
+    "mongoose": "^9.1.5",
+    "node-cache": "^5.1.2"
   }
 }

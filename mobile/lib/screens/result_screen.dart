@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../core/disorder_explanations.dart';
 import '../core/theme.dart';
 import '../models/enriched_analysis.dart';
+import '../models/ingredient.dart';
 import '../models/scan_result.dart';
 import '../utils/text_parser.dart';
 import '../widgets/ingredient_card.dart';
@@ -10,12 +12,14 @@ class ResultScreen extends StatelessWidget {
   final ScanResult scanResult;
   final EnrichmentBundle? enrichment;
   final List<TraceWarning> traceWarnings;
+  final bool lowQualityOcr;
 
   const ResultScreen({
     super.key,
     required this.scanResult,
     this.enrichment,
     this.traceWarnings = const [],
+    this.lowQualityOcr = false,
   });
 
   @override
@@ -36,6 +40,11 @@ class ResultScreen extends StatelessWidget {
                 children: [
                   if (scanResult.imagePath != null) _buildImagePreview(),
                   const SizedBox(height: 20),
+
+                  if (lowQualityOcr) ...[
+                    _buildLowQualityNotice(),
+                    const SizedBox(height: 20),
+                  ],
 
                   // Card do produto (se identificado via Open Food Facts)
                   if (enrichment?.product != null) ...[
@@ -59,6 +68,8 @@ class ResultScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   if (scanResult.flaggedIngredients.isNotEmpty) ...[
+                    _buildWhyCareSection(scanResult.flaggedIngredients),
+                    const SizedBox(height: 20),
                     const Text(
                       'Ingredientes com Alerta',
                       style: TextStyle(
@@ -383,6 +394,181 @@ class ResultScreen extends StatelessWidget {
                   ],
                 ),
               )),
+        ],
+      ),
+    );
+  }
+
+  /// Agrupa os ingredientes flagged por distúrbio relacionado e explica por
+  /// que cada distúrbio reage àqueles ingredientes — com sintomas/mecanismo.
+  Widget _buildWhyCareSection(List<Ingredient> flagged) {
+    // disorder -> lista de ingredientes (nomes) que dispararam por ele
+    final byDisorder = <String, List<String>>{};
+    for (final ing in flagged) {
+      final disorders = (ing.relatedDisorder ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty);
+      for (final d in disorders) {
+        byDisorder.putIfAbsent(d, () => []).add(ing.name);
+      }
+    }
+    if (byDisorder.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.dangerRed.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.lightbulb_outline,
+                  color: AppTheme.dangerRed, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Por que tomar cuidado com estes ingredientes?',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppTheme.dangerRed),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...byDisorder.entries.map((e) {
+            final explanation = disorderExplanations[e.key];
+            return _buildDisorderExplanationCard(
+              disorder: e.key,
+              triggers: e.value,
+              explanation: explanation,
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisorderExplanationCard({
+    required String disorder,
+    required List<String> triggers,
+    required DisorderExplanation? explanation,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                explanation?.icon ?? Icons.warning_amber_rounded,
+                color: AppTheme.dangerRed,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  disorder,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'No rótulo: ',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: AppTheme.textSecondary),
+                ),
+                TextSpan(
+                  text: triggers.toSet().join(', '),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.dangerRed),
+                ),
+              ],
+            ),
+          ),
+          if (explanation != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              explanation.shortReason,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              explanation.detail,
+              style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.45,
+                  color: AppTheme.textSecondary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLowQualityNotice() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.warningYellow.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.5)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: AppTheme.accentOrange, size: 22),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Qualidade do OCR baixa',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.accentOrange),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'A foto não tinha contraste/foco ideais. Confira os ingredientes '
+                  'abaixo manualmente — alguns podem estar com grafia errada. Para '
+                  'um resultado preciso, use "Ler Código de Barras".',
+                  style: TextStyle(fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

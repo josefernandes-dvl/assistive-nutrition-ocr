@@ -55,8 +55,11 @@ app.use("/api/products", productsRouter);
 // persistência (scans/profiles) reportarão erro, mas /api/ocr e /api/products
 // continuam funcionando para análise online.
 app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
+  const isProd = process.env.NODE_ENV === "production";
+  console.log(`[NutriScan] Servidor escutando na porta ${PORT} (env: ${isProd ? "production" : "development"})`);
+  if (!isProd) {
+    console.log(`[NutriScan] Health check: http://localhost:${PORT}/api/health`);
+  }
 });
 
 // Listener silencioso para erros futuros do driver (evita crash)

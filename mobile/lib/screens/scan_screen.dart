@@ -25,12 +25,12 @@ class _ScanScreenState extends State<ScanScreen> {
   File? _selectedImage;
   bool _isProcessing = false;
   String? _errorMessage;
-  bool _tesseractAvailable = false;
+  bool _ocrAvailable = false;
 
   @override
   void initState() {
     super.initState();
-    _checkTesseract();
+    _checkOcr();
   }
 
   @override
@@ -39,10 +39,10 @@ class _ScanScreenState extends State<ScanScreen> {
     super.dispose();
   }
 
-  Future<void> _checkTesseract() async {
-    final available = await OcrService.isTesseractAvailable();
+  Future<void> _checkOcr() async {
+    final available = await OcrService.isOcrAvailable();
     if (mounted) {
-      setState(() => _tesseractAvailable = available);
+      setState(() => _ocrAvailable = available);
     }
   }
 
@@ -104,14 +104,15 @@ class _ScanScreenState extends State<ScanScreen> {
       final cleanText = TextParser.cleanOcrText(rawText);
       final ingredientNames = TextParser.extractIngredientNames(cleanText);
 
-      // Se o OCR rodou mas a qualidade está claramente ruim, avisa o usuário
-      // em vez de mostrar lixo na tela. Sugere o fluxo de barcode.
-      if (outcome.isLowQuality || ingredientNames.isEmpty) {
+      // Só bloqueia quando o parser não conseguiu extrair nenhum ingrediente.
+      // Quando há resultado mas a qualidade está baixa, a análise segue e o
+      // ResultScreen exibe um aviso amarelo recomendando verificação manual.
+      if (ingredientNames.isEmpty) {
         setState(() {
-          _errorMessage = 'A foto não tem qualidade suficiente para extrair '
-              'os ingredientes corretamente. Dicas: enquadre apenas a lista de '
-              'ingredientes, mantenha a câmera paralela ao rótulo e use boa '
-              'iluminação. Para produtos cadastrados, prefira "Ler Código de Barras".';
+          _errorMessage =
+              'Não foi possível identificar ingredientes na imagem. Tente '
+              'enquadrar apenas a lista de ingredientes do rótulo, bem iluminada, '
+              'ou use "Ler Código de Barras" se o produto tiver código visível.';
           _isProcessing = false;
         });
         return;
@@ -175,6 +176,7 @@ class _ScanScreenState extends State<ScanScreen> {
             scanResult: result,
             enrichment: enrichment,
             traceWarnings: traceWarnings,
+            lowQualityOcr: outcome.isLowQuality,
           ),
         ),
       );
@@ -200,8 +202,8 @@ class _ScanScreenState extends State<ScanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Status do Tesseract
-            _buildTesseractStatus(),
+            // Status do OCR (ML Kit em mobile, Tesseract em desktop)
+            _buildOcrStatus(),
 
             const SizedBox(height: 20),
 
@@ -272,7 +274,7 @@ class _ScanScreenState extends State<ScanScreen> {
             PrimaryButton(
               label: _isProcessing ? 'Processando OCR...' : 'Analisar Rótulo',
               icon: Icons.analytics_outlined,
-              onPressed: (_selectedImage != null && !_isProcessing && _tesseractAvailable)
+              onPressed: (_selectedImage != null && !_isProcessing && _ocrAvailable)
                   ? _processImage
                   : () {},
               isLoading: _isProcessing,
@@ -288,11 +290,12 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _buildTesseractStatus() {
+  Widget _buildOcrStatus() {
+    final engine = OcrService.engineName();
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _tesseractAvailable
+        color: _ocrAvailable
             ? AppTheme.safeGreen.withValues(alpha: 0.1)
             : AppTheme.warningYellow.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
@@ -300,20 +303,21 @@ class _ScanScreenState extends State<ScanScreen> {
       child: Row(
         children: [
           Icon(
-            _tesseractAvailable ? Icons.check_circle : Icons.warning_amber,
-            color: _tesseractAvailable
+            _ocrAvailable ? Icons.check_circle : Icons.warning_amber,
+            color: _ocrAvailable
                 ? AppTheme.safeGreen
                 : AppTheme.warningYellow,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _tesseractAvailable
-                  ? 'OCR pronto (Tesseract com suporte a Português)'
-                  : 'Tesseract OCR não detectado.\nInstale: sudo apt install tesseract-ocr tesseract-ocr-por',
+              _ocrAvailable
+                  ? 'OCR pronto ($engine)'
+                  : 'OCR ($engine) não disponível.\n'
+                      'Em desktop: instale `tesseract-ocr tesseract-ocr-por`.',
               style: TextStyle(
                 fontSize: 13,
-                color: _tesseractAvailable
+                color: _ocrAvailable
                     ? AppTheme.safeGreen
                     : AppTheme.accentOrange,
               ),

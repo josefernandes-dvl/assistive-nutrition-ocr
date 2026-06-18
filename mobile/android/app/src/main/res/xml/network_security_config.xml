@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permite tráfego HTTP em LAN/dev. Quando o backend for migrado para HTTPS,
+  remova `cleartextTraffic="true"` e mantenha só os certificados confiáveis.
+-->
+<network-security-config>
+    <base-config cleartextTraffic="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

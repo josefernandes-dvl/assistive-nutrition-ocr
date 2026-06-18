@@ -1,31 +1,85 @@
 import 'dart:io';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../core/ingredient_dictionary.dart';
 
-/// Serviço de OCR de alta performance para desktop (Linux/macOS/Windows).
+/// Serviço de OCR multiplataforma.
 ///
-/// Pipeline v3 (paralelo):
-///   1. Pré-processa em DUAS variantes: binarizada normal (texto escuro em
-///      fundo claro) e binarizada INVERTIDA (texto claro em fundo escuro,
-///      como rótulos de plástico colorido).
-///   2. Roda Tesseract com 2 PSMs (6 = bloco uniforme, 4 = coluna) em
-///      paralelo — 4 chamadas, todas concorrentes.
-///   3. Pontua cada resultado pelo dicionário de ingredientes.
-///   4. Se o melhor candidato tiver score baixo, lança exceção com sugestão
-///      de usar barcode (a foto provavelmente é ruim).
+/// - **Mobile (Android/iOS)**: usa `google_mlkit_text_recognition` (on-device,
+///   gratuito, offline). É a engine recomendada para release.
+/// - **Desktop (Linux/macOS/Windows)**: usa Tesseract CLI com pipeline próprio
+///   de pré-processamento. Útil só para desenvolvimento — não roda em release
+///   mobile.
 class OcrService {
-  /// Score mínimo de termos válidos do dicionário para o resultado ser aceito.
-  /// Abaixo disso, considera-se que o OCR falhou (foto ruim).
-  static const int _minQualityScore = 2;
+  /// Score mínimo de termos válidos do dicionário para considerar a qualidade
+  /// "alta". Abaixo disso, o OCR ainda é entregue ao app mas marcado como
+  /// baixa qualidade — a UI mostra um aviso, sem bloquear a análise.
+  static const int _minQualityScore = 1;
 
-  static Future<OcrOutcome> extractText(String imagePath) async {
+  /// Roteia para o engine apropriado conforme a plataforma.
+  static Future<OcrOutcome> extractText(String imagePath) {
+    if (Platform.isAndroid || Platform.isIOS) {
+      return _extractMobile(imagePath);
+    }
+    return _extractDesktop(imagePath);
+  }
+
+  /// Retorna true se o OCR estiver pronto para uso na plataforma atual.
+  /// - Em mobile, ML Kit está sempre disponível (modelo bundle).
+  /// - Em desktop, verifica se o binário Tesseract existe no PATH.
+  static Future<bool> isOcrAvailable() {
+    if (Platform.isAndroid || Platform.isIOS) return Future.value(true);
+    return _isTesseractAvailable();
+  }
+
+  /// Nome legível da engine atual (para exibir na UI).
+  static String engineName() {
+    if (Platform.isAndroid || Platform.isIOS) return 'Google ML Kit';
+    return 'Tesseract';
+  }
+
+  // ============================================================
+  // MOBILE — Google ML Kit Text Recognition
+  // ============================================================
+
+  static Future<OcrOutcome> _extractMobile(String imagePath) async {
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final inputImage = InputImage.fromFilePath(imagePath);
+      final result = await recognizer.processImage(inputImage);
+      final text = result.text.trim();
+
+      if (text.isEmpty) {
+        throw OcrException(
+          'O OCR não reconheceu texto na imagem.',
+          suggestion:
+              'Tente uma foto mais nítida, sem reflexos, enquadrando apenas a '
+              'lista de ingredientes — ou use a leitura por código de barras.',
+        );
+      }
+
+      final matches = IngredientDictionary.scoreText(text);
+      return OcrOutcome(
+        text: text,
+        qualityScore: matches,
+        isLowQuality: matches < _minQualityScore,
+      );
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  // ============================================================
+  // DESKTOP — Tesseract CLI com pipeline próprio
+  // ============================================================
+
+  static Future<OcrOutcome> _extractDesktop(String imagePath) async {
     try {
       final variants = await _preprocessVariants(imagePath);
 
-      // Fan-out: roda todas as combinações (variante × PSM) em paralelo.
-      final futures = <Future<_OcrResult>>[];
+      final futures = <Future<_TesseractResult>>[];
       for (final variantPath in variants) {
         for (final psm in const ['6', '4']) {
           futures.add(_runTesseract(variantPath, psm));
@@ -39,8 +93,8 @@ class OcrService {
         throw OcrException(
           'O OCR não reconheceu texto na imagem.',
           suggestion:
-              'Tente uma foto mais nítida, sem reflexos, enquadrando apenas a '
-              'lista de ingredientes — ou use a leitura por código de barras.',
+              'Tente uma foto mais nítida com boa iluminação difusa — ou use '
+              'a leitura por código de barras.',
         );
       }
 
@@ -59,8 +113,6 @@ class OcrService {
       );
     }
   }
-
-  // ----------- Pipeline de pré-processamento -----------
 
   static Future<List<String>> _preprocessVariants(String inputPath) async {
     final bytes = await File(inputPath).readAsBytes();
@@ -92,19 +144,11 @@ class OcrService {
     gray = img.normalize(gray, min: 0, max: 255);
     gray = _sharpen(gray);
 
-    // Decide se a imagem é majoritariamente clara ou escura para escolher
-    // qual variante vai como "principal" e qual como "fallback".
     final isDarkDominant = _meanLuminance(gray) < 128;
-
-    // VARIANTE A: binarização normal (texto escuro em fundo claro)
     final binNormal = img.luminanceThreshold(gray.clone(), threshold: 0.55);
-
-    // VARIANTE B: binarização invertida (texto claro em fundo escuro).
-    // Inverte primeiro e depois binariza — equivalente a thresholding "ao contrário".
     final inverted = img.invert(gray.clone());
     final binInverted = img.luminanceThreshold(inverted, threshold: 0.55);
 
-    // Ordena: a variante "esperada" primeiro melhora a chance do early-best.
     final first = isDarkDominant ? binInverted : binNormal;
     final second = isDarkDominant ? binNormal : binInverted;
 
@@ -115,7 +159,6 @@ class OcrService {
   }
 
   static double _meanLuminance(img.Image image) {
-    // Amostra esparsa para não percorrer milhões de pixels
     int sum = 0, count = 0;
     final step = (image.width * image.height ~/ 5000).clamp(1, 1000);
     int idx = 0;
@@ -148,9 +191,8 @@ class OcrService {
     return outPath;
   }
 
-  // ----------- Execução do Tesseract -----------
-
-  static Future<_OcrResult> _runTesseract(String imagePath, String psm) async {
+  static Future<_TesseractResult> _runTesseract(
+      String imagePath, String psm) async {
     final result = await Process.run(
       'tesseract',
       [
@@ -163,41 +205,26 @@ class OcrService {
       ],
     );
     if (result.exitCode != 0) {
-      return _OcrResult(text: '', psm: psm, dictMatches: 0);
+      return _TesseractResult(text: '', psm: psm, dictMatches: 0);
     }
     final text = result.stdout as String;
     final matches = IngredientDictionary.scoreText(text);
     final alpha = RegExp(r'[A-Za-zÀ-ÿ]').allMatches(text).length;
-    // Score: termos válidos pesam muito; comprimento é tiebreaker.
-    final score = matches * 100 + alpha;
-    return _OcrResult(
+    return _TesseractResult(
       text: text,
       psm: psm,
       dictMatches: matches,
-      score: score,
+      score: matches * 100 + alpha,
     );
   }
 
-  // ----------- API auxiliar -----------
-
-  static Future<bool> isTesseractAvailable() async {
+  static Future<bool> _isTesseractAvailable() async {
     try {
       final result = await Process.run('tesseract', ['--version']);
       return result.exitCode == 0;
     } catch (_) {
       return false;
     }
-  }
-
-  static Future<List<String>> availableLanguages() async {
-    try {
-      final result = await Process.run('tesseract', ['--list-langs']);
-      if (result.exitCode == 0) {
-        final lines = (result.stdout as String).split('\n');
-        return lines.skip(1).where((l) => l.trim().isNotEmpty).toList();
-      }
-    } catch (_) {/* ignore */}
-    return [];
   }
 
   static bool get isDesktopPlatform =>
@@ -223,12 +250,12 @@ class OcrException implements Exception {
   String toString() => '$message\n$suggestion';
 }
 
-class _OcrResult {
+class _TesseractResult {
   final String text;
   final String psm;
   final int dictMatches;
   final int score;
-  const _OcrResult({
+  const _TesseractResult({
     required this.text,
     required this.psm,
     required this.dictMatches,

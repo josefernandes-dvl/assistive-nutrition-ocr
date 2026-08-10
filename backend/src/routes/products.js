@@ -11,14 +11,30 @@ const {
  * Retorna o produto da Open Food Facts (já simplificado).
  */
 router.get('/barcode/:code', async (req, res) => {
+  const inicio = process.hrtime.bigint();
+  const elapsedMs = () => Number(process.hrtime.bigint() - inicio) / 1e6;
+
   try {
     const product = await getProductByBarcode(req.params.code);
+    // Instrumenta o CA12: a latência da rota é medível de fora, sem depender
+    // de cronometrar do lado do cliente.
+    res.set('X-Response-Time-Ms', elapsedMs().toFixed(1));
+
     if (!product) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
     res.json(product);
   } catch (err) {
-    res.status(502).json({ error: 'Falha ao consultar Open Food Facts', detail: err.message });
+    res.set('X-Response-Time-Ms', elapsedMs().toFixed(1));
+    // Estouro do orçamento de tempo da consulta externa: o app trata como
+    // ausência de enriquecimento e segue com a análise local (RNF18).
+    const timeout = err.code === 'ECONNABORTED';
+    res.status(timeout ? 504 : 502).json({
+      error: timeout
+        ? 'A consulta à Open Food Facts demorou demais'
+        : 'Falha ao consultar Open Food Facts',
+      detail: err.message,
+    });
   }
 });
 

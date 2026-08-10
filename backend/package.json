@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "lint": "eslint src test",
     "test": "node --test test/*.test.js"
   },
   "keywords": [],
@@ -17,5 +18,9 @@
     "express": "^5.2.1",
     "mongoose": "^9.1.5",
     "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1"
   }
 }

@@ -106,22 +106,39 @@ class TextParser {
     );
     if (fullMatch != null) return fullMatch;
 
-    // 2. Match palavra a palavra
+    // 2. Match palavra a palavra, restrito a palavras com evidência de erro
+    //    de leitura (ver `_temEvidenciaDeErroDeOcr`).
     final words = ingredient.split(RegExp(r'\s+'));
     final corrected = words.map((w) {
-      final cleaned = w.replaceAll(RegExp(r'[^\wÀ-ÿ]'), '');
-      if (cleaned.length < 4) return w; // palavras curtas: não corrige
-      final norm = _normalizeForMatching(cleaned);
-      // Para palavras isoladas, exigir match bem próximo.
+      // Preserva pontuação de borda: "(leite," corrige o miolo, não o resto.
+      final core = w.replaceAll(RegExp(r'^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$'), '');
+      if (core.length < 4) return w; // palavras curtas: não corrige
+      if (!_temEvidenciaDeErroDeOcr(core)) return w;
+
       final match = IngredientDictionary.bestMatch(
-        norm,
+        _normalizeForMatching(core),
         maxDistance: 2,
         maxRelative: 0.25,
       );
-      return match ?? w;
+      return match == null ? w : w.replaceFirst(core, match);
     }).join(' ');
 
     return corrected;
+  }
+
+  /// Uma palavra isolada só é reescrita quando traz sinal de leitura errada —
+  /// na prática, um dígito no meio de letras (`far1nha`, `1eite`, `s0ja`), que
+  /// é o erro típico do OCR em rótulo impresso.
+  ///
+  /// Sem esse filtro, qualquer palavra do português a duas edições de um termo
+  /// do dicionário virava aquele termo: `sorbato de potássio` (um conservante
+  /// inofensivo) era reescrito como **sorbitol** e disparava alerta de FODMAP,
+  /// e `ácido fólico` virava `amido fólico`. Inventar ingrediente num app de
+  /// segurança alimentar é pior do que deixar de corrigir uma letra: a
+  /// expressão inteira ainda é comparada com o dicionário no passo 1, que
+  /// cobre os casos reais de troca de letra (`giúten` → `glúten`).
+  static bool _temEvidenciaDeErroDeOcr(String word) {
+    return RegExp(r'[0-9]').hasMatch(word);
   }
 
   static List<String> _splitRespectingParens(String text) {
@@ -295,16 +312,69 @@ class TextParser {
     return map[c] ?? c;
   }
 
-  /// Match por palavra (com fronteiras), tolerante a acentos.
+  /// Match por palavra (com fronteiras), tolerante a acentos e a flexão de
+  /// número (RN01).
+  ///
+  /// A fronteira de palavra evita o falso positivo de substring (`sal` não
+  /// casa com `salsa`, `ovo` não casa com `novo`). O conjunto de formas
+  /// flexionadas cobre o risco simétrico: um gatilho registrado no singular
+  /// precisa casar com a forma plural impressa no rótulo (`trigo` → `trigos`).
+  ///
+  /// Cada palavra do gatilho vira uma alternativa `(?:forma1|forma2)`, porque
+  /// em português a flexão pode recair sobre o núcleo (`farinhas de trigo`) ou
+  /// sobre o complemento (`claras de ovo`).
   static bool _matchesAsWord(String normalizedHaystack, String trigger) {
-    final t = _normalizeForMatching(trigger).trim();
-    if (t.isEmpty) return false;
-    final escaped = RegExp.escape(t);
-    // Fronteira manual (espaço, pontuação ou início/fim) — \b em Dart não cobre bem unicode
-    final pattern = RegExp(
-      r'(?:^|[^a-z0-9])' + escaped + r'(?:$|[^a-z0-9])',
-    );
+    final pattern = _triggerPattern(trigger);
+    if (pattern == null) return false;
     return pattern.hasMatch(normalizedHaystack);
+  }
+
+  /// Cache de padrões: o mesmo gatilho é testado contra dezenas de ingredientes
+  /// por análise.
+  static final Map<String, RegExp?> _patternCache = {};
+
+  static RegExp? _triggerPattern(String trigger) {
+    return _patternCache.putIfAbsent(trigger, () {
+      final t = _normalizeForMatching(trigger).trim();
+      if (t.isEmpty) return null;
+      final words = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+      final body = words.map((w) {
+        final forms = inflectionForms(w).map(RegExp.escape).toList();
+        return forms.length == 1 ? forms.first : '(?:${forms.join('|')})';
+      }).join(r'\s+');
+      // Fronteira manual (espaço, pontuação ou início/fim) — \b em Dart não
+      // cobre bem unicode.
+      return RegExp(r'(?:^|[^a-z0-9])' + body + r'(?:$|[^a-z0-9])');
+    });
+  }
+
+  /// Formas de número aceitas para uma palavra já normalizada (sem acento).
+  ///
+  /// Cobre as regras regulares do português suficientes para rotulagem:
+  /// vogal → +s (`trigo`/`trigos`), -l → -is (`alcool`/`alcoois`),
+  /// -m → -ns, -r/-z → +es, -ao → -oes. Palavras de até 2 letras (`de`, `do`)
+  /// não são flexionadas. Visível para teste.
+  static List<String> inflectionForms(String word) {
+    final w = word.trim();
+    if (w.length < 3) return [w];
+    final forms = <String>{w};
+    final last = w[w.length - 1];
+
+    if (w.endsWith('ao')) {
+      forms.add('${w.substring(0, w.length - 2)}oes');
+    } else if ('aeiou'.contains(last)) {
+      forms.add('${w}s');
+    } else if (last == 'l') {
+      forms.add('${w.substring(0, w.length - 1)}is');
+    } else if (last == 'm') {
+      forms.add('${w.substring(0, w.length - 1)}ns');
+    } else if (last == 'r' || last == 'z') {
+      forms.add('${w}es');
+    }
+    // Palavras terminadas em -s (`arachis`, `ovos`) permanecem invariáveis:
+    // gerar singular a partir delas reintroduziria risco de falso positivo.
+
+    return forms.toList();
   }
 
   static String _prettifyName(String s) {

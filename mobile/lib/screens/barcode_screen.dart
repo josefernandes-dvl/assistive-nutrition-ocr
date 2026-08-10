@@ -149,6 +149,7 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
                 },
               ),
               onPressed: () => _controller!.toggleTorch(),
+              tooltip: 'Alternar lanterna',
             ),
         ],
       ),
@@ -179,7 +180,7 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
               if (_errorMessage != null) _buildErrorBanner(),
               if (_isProcessing)
                 PrimaryButton(
-                  label: 'Consultando Open Food Facts...',
+                  label: 'Consultando servidor (até 30s)...',
                   icon: Icons.search,
                   onPressed: () {},
                   isLoading: true,
@@ -308,6 +309,7 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () => _lookupBarcode(_manualController.text),
+            tooltip: 'Buscar código',
           ),
         ],
       ),
@@ -349,9 +351,11 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
                           fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(width: 8),
-                    Text('— ${s.$2}',
-                        style: const TextStyle(
-                            fontSize: 13, color: AppTheme.textSecondary)),
+                    Expanded(
+                      child: Text('— ${s.$2}',
+                          style: const TextStyle(
+                              fontSize: 13, color: AppTheme.textSecondary)),
+                    ),
                   ],
                 ),
               ),
@@ -364,7 +368,7 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.dangerRed.withValues(alpha: 0.85),
+        color: AppTheme.dangerRedText,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

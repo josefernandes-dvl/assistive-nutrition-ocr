@@ -1,0 +1,187 @@
+{
+  "description": "Tabela canônica da RN02 (gatilhos por distúrbio) e do mapeamento de allergens_tags da Open Food Facts. É a fonte única contra a qual as duas cópias em código — mobile/lib/core/constants.dart e backend/src/data/disorderTriggers.js — são verificadas por teste de paridade.",
+  "fontes": [
+    "Anvisa RDC 727/2022 Anexo III (alergênicos)",
+    "Monash University FODMAP"
+  ],
+  "version": 1,
+  "disorder_triggers": {
+    "Intolerância à Lactose": [
+      "leite",
+      "lactose",
+      "soro de leite",
+      "soro do leite",
+      "soro lacteo",
+      "caseina",
+      "caseinato",
+      "manteiga",
+      "creme de leite",
+      "queijo",
+      "iogurte",
+      "nata",
+      "whey",
+      "lactalbumina",
+      "leite em po",
+      "leite condensado"
+    ],
+    "Doença Celíaca": [
+      "trigo",
+      "gluten",
+      "cevada",
+      "centeio",
+      "malte",
+      "farinha de trigo",
+      "amido de trigo",
+      "semolina",
+      "espelta",
+      "kamut",
+      "triticale",
+      "farelo de trigo",
+      "germen de trigo",
+      "extrato de malte",
+      "cerveja"
+    ],
+    "Síndrome do Intestino Irritável (SII)": [
+      "lactose",
+      "frutose",
+      "sorbitol",
+      "manitol",
+      "xilitol",
+      "maltitol",
+      "inulina",
+      "frutano",
+      "galactano",
+      "cebola",
+      "alho",
+      "gluten"
+    ],
+    "Doença de Crohn": [
+      "lactose",
+      "gluten",
+      "cafeina",
+      "alcool",
+      "gordura trans",
+      "gordura hidrogenada",
+      "corante artificial",
+      "edulcorante"
+    ],
+    "Colite Ulcerativa": [
+      "lactose",
+      "gluten",
+      "cafeina",
+      "alcool",
+      "pimenta",
+      "gordura trans",
+      "conservante",
+      "aromatizante artificial"
+    ],
+    "Alergia à Proteína do Leite (APLV)": [
+      "leite",
+      "caseina",
+      "caseinato",
+      "soro de leite",
+      "whey",
+      "manteiga",
+      "creme de leite",
+      "queijo",
+      "iogurte",
+      "lactoalbumina",
+      "lactoglobulina"
+    ],
+    "Alergia ao Ovo": [
+      "ovo",
+      "ovos",
+      "clara de ovo",
+      "gema",
+      "albumina",
+      "ovoalbumina",
+      "lecitina de ovo",
+      "lisozima"
+    ],
+    "Alergia ao Amendoim": [
+      "amendoim",
+      "pasta de amendoim",
+      "oleo de amendoim",
+      "arachis"
+    ],
+    "Alergia à Soja": [
+      "soja",
+      "lecitina de soja",
+      "proteina de soja",
+      "oleo de soja",
+      "extrato de soja",
+      "molho de soja",
+      "shoyu",
+      "tofu"
+    ],
+    "Intolerância à Frutose": [
+      "frutose",
+      "xarope de milho",
+      "xarope de glicose-frutose",
+      "mel",
+      "agave",
+      "sorbitol",
+      "xarope de frutose",
+      "sacarose"
+    ],
+    "FODMAP Sensível": [
+      "frutose",
+      "lactose",
+      "sorbitol",
+      "manitol",
+      "xilitol",
+      "maltitol",
+      "inulina",
+      "frutano",
+      "oligofrutose",
+      "cebola",
+      "alho",
+      "trigo"
+    ],
+    "Refluxo Gastroesofágico (DRGE)": [
+      "cafeina",
+      "chocolate",
+      "hortela",
+      "menta",
+      "pimenta",
+      "tomate",
+      "cebola",
+      "alho",
+      "alcool",
+      "gordura hidrogenada"
+    ]
+  },
+  "off_allergen_to_disorders": {
+    "en:gluten": [
+      "Doença Celíaca",
+      "FODMAP Sensível",
+      "Doença de Crohn",
+      "Colite Ulcerativa"
+    ],
+    "en:milk": [
+      "Alergia à Proteína do Leite (APLV)",
+      "Intolerância à Lactose"
+    ],
+    "en:lactose": [
+      "Intolerância à Lactose"
+    ],
+    "en:eggs": [
+      "Alergia ao Ovo"
+    ],
+    "en:peanuts": [
+      "Alergia ao Amendoim"
+    ],
+    "en:soybeans": [
+      "Alergia à Soja"
+    ],
+    "en:nuts": [],
+    "en:fish": [],
+    "en:crustaceans": [],
+    "en:shellfish": [],
+    "en:sesame-seeds": [],
+    "en:mustard": [],
+    "en:celery": [],
+    "en:sulphur-dioxide-and-sulphites": [],
+    "en:molluscs": []
+  }
+}

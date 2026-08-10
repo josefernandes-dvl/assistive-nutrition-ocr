@@ -136,12 +136,71 @@ function normalize(text) {
     .replace(/ç/g, 'c');
 }
 
+/**
+ * Match por palavra (com fronteiras), tolerante a acentos e a flexão de
+ * número (RN01). Espelha `TextParser._matchesAsWord` em
+ * mobile/lib/utils/text_parser.dart — as duas camadas precisam decidir igual.
+ *
+ * A fronteira evita falso positivo de substring (`sal` ≠ `salsa`); as formas
+ * flexionadas evitam o falso negativo simétrico (`trigo` → `trigos`).
+ */
 function matchesAsWord(haystack, trigger) {
-  const t = normalize(trigger);
-  if (!t) return false;
-  const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`);
+  const re = triggerPattern(trigger);
+  if (!re) return false;
   return re.test(haystack);
+}
+
+const patternCache = new Map();
+
+function triggerPattern(trigger) {
+  if (patternCache.has(trigger)) return patternCache.get(trigger);
+
+  const t = normalize(trigger).trim();
+  let re = null;
+  if (t) {
+    const body = t
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => {
+        const forms = inflectionForms(w).map((f) =>
+          f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        );
+        return forms.length === 1 ? forms[0] : `(?:${forms.join('|')})`;
+      })
+      .join('\\s+');
+    re = new RegExp(`(?:^|[^a-z0-9])${body}(?:$|[^a-z0-9])`);
+  }
+
+  patternCache.set(trigger, re);
+  return re;
+}
+
+/**
+ * Formas de número aceitas para uma palavra já normalizada (sem acento).
+ * Regras regulares do português suficientes para rotulagem: vogal → +s,
+ * -l → -is, -m → -ns, -r/-z → +es, -ao → -oes. Palavras de até 2 letras
+ * (`de`, `do`) não flexionam; terminadas em -s permanecem invariáveis.
+ */
+function inflectionForms(word) {
+  const w = String(word || '').trim();
+  if (w.length < 3) return [w];
+
+  const forms = new Set([w]);
+  const last = w[w.length - 1];
+
+  if (w.endsWith('ao')) {
+    forms.add(`${w.slice(0, -2)}oes`);
+  } else if ('aeiou'.includes(last)) {
+    forms.add(`${w}s`);
+  } else if (last === 'l') {
+    forms.add(`${w.slice(0, -1)}is`);
+  } else if (last === 'm') {
+    forms.add(`${w.slice(0, -1)}ns`);
+  } else if (last === 'r' || last === 'z') {
+    forms.add(`${w}es`);
+  }
+
+  return [...forms];
 }
 
 function prettify(s) {
@@ -153,4 +212,4 @@ function prettify(s) {
     .join(' ');
 }
 
-module.exports = { analyze };
+module.exports = { analyze, matchesAsWord, inflectionForms, normalize };

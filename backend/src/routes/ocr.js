@@ -41,7 +41,7 @@ router.post('/analyze', async (req, res) => {
     if (barcode) {
       try {
         product = await getProductByBarcode(barcode);
-      } catch (err) {
+      } catch (_err) {
         // Falha de rede ao consultar OFF não bloqueia a análise local.
         product = null;
       }

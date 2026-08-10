@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../providers/app_provider.dart';
 import '../widgets/primary_button.dart';
+import 'accessibility_screen.dart';
 import 'barcode_screen.dart';
 import 'scan_screen.dart';
+import 'privacy_screen.dart';
 import 'profile_screen.dart';
 import 'history_screen.dart';
 
@@ -76,13 +78,31 @@ class HomeScreen extends StatelessWidget {
                           builder: (_) => const HistoryScreen(),
                         ),
                       ),
-                      backgroundColor: AppTheme.accentOrange,
+                      backgroundColor: AppTheme.accentOrangeDark,
                     ),
 
                     const SizedBox(height: 32),
 
                     // Card informativo
                     _buildInfoCard(),
+
+                    const SizedBox(height: 8),
+
+                    // Privacidade e direito de eliminação (RNF11, RNF14)
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PrivacyScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.shield_outlined, size: 18),
+                      label: const Text('Privacidade e dados'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppTheme.primaryGreen,
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -113,7 +133,8 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
+              const Expanded(
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -129,10 +150,25 @@ class HomeScreen extends StatelessWidget {
                     'Assistente nutricional inteligente',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white70,
+                      color: Colors.white,
                     ),
                   ),
                 ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AccessibilityScreen(),
+                  ),
+                ),
+                icon: const Icon(
+                  Icons.accessibility_new,
+                  color: Colors.white,
+                  size: 30,
+                ),
+                tooltip: 'Acessibilidade',
               ),
               IconButton(
                 onPressed: () => Navigator.push(
@@ -179,7 +215,7 @@ class HomeScreen extends StatelessWidget {
                             ? '${provider.profile.disorders.length} condição(ões) monitorada(s)'
                             : 'Configure seu perfil para começar',
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontSize: 13,
                         ),
                       ),
@@ -205,13 +241,16 @@ class HomeScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.shield, color: AppTheme.safeGreen, size: 22),
+                  const Icon(Icons.shield,
+                      color: AppTheme.safeGreenText, size: 22),
                   const SizedBox(width: 8),
-                  Text(
-                    'Monitorando: ${provider.profile.name}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                  Expanded(
+                    child: Text(
+                      'Monitorando: ${provider.profile.name}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -249,7 +288,8 @@ class HomeScreen extends StatelessWidget {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.info_outline, color: AppTheme.accentOrange, size: 28),
+              Icon(Icons.info_outline,
+                  color: AppTheme.accentOrangeDark, size: 28),
               SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -358,11 +398,13 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Icon(icon, size: 18, color: AppTheme.primaryGreen),
                     const SizedBox(width: 6),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   ],
@@ -394,14 +436,15 @@ class HomeScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.science_outlined, color: AppTheme.primaryGreen),
+                Icon(Icons.science_outlined,
+                    color: AppTheme.primaryGreenDark),
                 SizedBox(width: 8),
                 Text(
                   'Sobre o Projeto',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: AppTheme.primaryGreen,
+                    color: AppTheme.primaryGreenDark,
                   ),
                 ),
               ],

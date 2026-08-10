@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../core/theme.dart';
+import '../models/scan_result.dart';
 import '../providers/app_provider.dart';
 import 'result_screen.dart';
 
@@ -39,7 +40,7 @@ class HistoryScreen extends StatelessWidget {
                         },
                         child: const Text(
                           'Apagar',
-                          style: TextStyle(color: AppTheme.dangerRed),
+                          style: TextStyle(color: AppTheme.dangerRedText),
                         ),
                       ),
                     ],
@@ -60,9 +61,23 @@ class HistoryScreen extends StatelessWidget {
                 final scan = history[index];
                 final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(scan.scannedAt);
 
+                final alertText = scan.hasDangerousIngredients
+                    ? 'Alerta: ${scan.flaggedIngredients.length} '
+                        'ingrediente(s) problemático(s)'
+                    : 'Sem alertas';
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: InkWell(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label: '$alertText. '
+                              '${scan.totalIngredients} ingredientes '
+                              'detectados em $dateStr. Abrir detalhe.',
+                          excludeSemantics: true,
+                          child: InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: () => Navigator.push(
                       context,
@@ -114,8 +129,8 @@ class HistoryScreen extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: scan.hasDangerousIngredients
-                                        ? AppTheme.dangerRed
-                                        : AppTheme.safeGreen,
+                                        ? AppTheme.dangerRedText
+                                        : AppTheme.safeGreenText,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -137,11 +152,51 @@ class HistoryScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                          ),
+                        ),
+                      ),
+                      // Exclusão individual da análise (RF17)
+                      IconButton(
+                        onPressed: () => _confirmRemove(context, provider, scan),
+                        icon: const Icon(Icons.delete_outline,
+                            color: AppTheme.textSecondary),
+                        tooltip: 'Excluir esta análise',
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                   ),
                 );
               },
             ),
     );
+  }
+
+  Future<void> _confirmRemove(
+    BuildContext context,
+    AppProvider provider,
+    ScanResult scan,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir análise'),
+        content: const Text('Esta análise será removida do histórico.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: AppTheme.dangerRedText),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await provider.removeScanResult(scan);
   }
 
   Widget _buildEmptyState() {
@@ -151,10 +206,12 @@ class HistoryScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.history,
-              size: 80,
-              color: Colors.grey.shade300,
+            ExcludeSemantics(
+              child: Icon(
+                Icons.history,
+                size: 80,
+                color: Colors.grey.shade300,
+              ),
             ),
             const SizedBox(height: 16),
             const Text(

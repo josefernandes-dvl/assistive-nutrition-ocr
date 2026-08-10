@@ -57,7 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Perfil salvo com sucesso!'),
-        backgroundColor: AppTheme.safeGreen,
+        backgroundColor: AppTheme.primaryGreen,
       ),
     );
 
@@ -109,6 +109,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'automaticamente ingredientes que podem causar reações '
                       'relacionadas aos seus distúrbios digestivos.',
                       style: TextStyle(fontSize: 13, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Aviso LGPD — informa o usuário sobre o uso dos dados
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.accentOrange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.accentOrange.withValues(alpha: 0.3),
+                ),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined,
+                      color: AppTheme.accentOrangeDark, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Privacidade (LGPD): seus dados de saúde ficam armazenados '
+                      'apenas localmente neste dispositivo, exceto quando você '
+                      'consulta a Open Food Facts (apenas o código de barras é '
+                      'enviado). Você pode excluir tudo a qualquer momento.',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.4,
+                          color: AppTheme.textPrimary),
                     ),
                   ),
                 ],
@@ -193,7 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 : Icons.check_box_outline_blank,
                             color: isSelected
                                 ? AppTheme.primaryGreen
-                                : Colors.grey.shade400,
+                                : AppTheme.textSecondary,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -253,6 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 IconButton(
                   onPressed: _addCustomAllergen,
                   icon: const Icon(Icons.add),
+                  tooltip: 'Adicionar alérgeno',
                   style: IconButton.styleFrom(
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,

@@ -1,12 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Permite tráfego HTTP em LAN/dev. Quando o backend for migrado para HTTPS,
-  remova `cleartextTraffic="true"` e mantenha só os certificados confiáveis.
+  RA-11: Endurecimento de tráfego de rede.
+
+  Produção: o backend é servido via HTTPS pelo PaaS, portanto o padrão
+  seguro é NÃO permitir tráfego em texto claro (cleartext/HTTP). Assim,
+  builds de release nunca aceitam HTTP por acidente.
+
+  Desenvolvimento: o HTTP em texto claro é liberado APENAS para os hosts
+  de desenvolvimento local abaixo (emulador Android e loopback). Para
+  depuração ad-hoc em qualquer IP de LAN, o cleartext é liberado somente
+  em builds de debug via <debug-overrides> (não afeta release).
 -->
 <network-security-config>
-    <base-config cleartextTraffic="true">
+
+    <!-- Padrão seguro: nada de HTTP em texto claro (produção é HTTPS). -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system"/>
         </trust-anchors>
     </base-config>
+
+    <!--
+      Exceções de desenvolvimento local: liberam HTTP apenas para os hosts
+      conhecidos de dev. Faixas privadas (ex.: 192.168.0.0/16) não são
+      válidas como <domain>; para depurar em IPs de LAN arbitrários use um
+      build de debug (ver <debug-overrides> abaixo).
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Emulador Android -> host da máquina de desenvolvimento -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Loopback local -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+
+    <!--
+      Somente em builds de debug: permite cleartext em qualquer host
+      (ex.: IPs de LAN como 192.168.x.x) e confia em CAs instaladas pelo
+      usuário. Esse bloco é ignorado em builds de release (RA-11).
+    -->
+    <debug-overrides cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
+
 </network-security-config>

@@ -77,17 +77,22 @@ class OcrService {
 
   static Future<OcrOutcome> _extractDesktop(String imagePath) async {
     try {
-      final variants = await _preprocessVariants(imagePath);
+      // 1. Imagem como veio. O Tesseract já faz binarização adaptativa (Otsu)
+      //    internamente e, em rótulo bem iluminado, ela supera qualquer
+      //    pré-processamento fixo — a mesma constatação que levou à remoção do
+      //    pré-processamento manual no caminho mobile (RF08).
+      final results = await _runVariant(imagePath);
 
-      final futures = <Future<_TesseractResult>>[];
-      for (final variantPath in variants) {
-        for (final psm in const ['6', '4']) {
-          futures.add(_runTesseract(variantPath, psm));
+      // 2. Só quando a leitura direta não reconhece nenhum termo do dicionário
+      //    vale pagar o custo do pipeline de resgate (upscale, normalização,
+      //    binarização dupla), que existe para rótulo escuro ou de baixo
+      //    contraste.
+      if (results.isEmpty || results.first.dictMatches == 0) {
+        for (final variante in await _preprocessVariants(imagePath)) {
+          results.addAll(await _runVariant(variante));
         }
+        results.sort((a, b) => b.score.compareTo(a.score));
       }
-      final results = (await Future.wait(futures))
-          .where((r) => r.text.trim().isNotEmpty)
-          .toList();
 
       if (results.isEmpty) {
         throw OcrException(
@@ -114,10 +119,30 @@ class OcrService {
     }
   }
 
+  /// Roda os dois modos de segmentação do Tesseract sobre uma variante,
+  /// devolvendo os resultados não vazios, do melhor para o pior.
+  static Future<List<_TesseractResult>> _runVariant(String variantPath) async {
+    final results = await Future.wait(
+      const ['6', '4'].map((psm) => _runTesseract(variantPath, psm)),
+    );
+    final uteis = results.where((r) => r.text.trim().isNotEmpty).toList()
+      ..sort((a, b) => b.score.compareTo(a.score));
+    return uteis;
+  }
+
   static Future<List<String>> _preprocessVariants(String inputPath) async {
     final bytes = await File(inputPath).readAsBytes();
     img.Image? base = img.decodeImage(bytes);
     if (base == null) return [inputPath];
+
+    // Normaliza para 3 canais antes de qualquer cálculo de luminância.
+    // Numa imagem de 1 canal (PNG/JPEG salvo em escala de cinza), os canais
+    // verde e azul valem zero, e a luminância fica presa em ~30% do valor
+    // real — o que fazia a binarização devolver uma imagem inteiramente preta
+    // e o OCR não reconhecer nada. Regressão coberta por ocr_corpus_test.dart.
+    if (base.numChannels < 3) {
+      base = base.convert(numChannels: 3);
+    }
 
     base = img.bakeOrientation(base);
 
@@ -180,9 +205,23 @@ class OcrService {
     );
   }
 
+  /// Diretório temporário para os arquivos intermediários do pré-processamento.
+  ///
+  /// `path_provider` depende de plugin de plataforma; em execução sem plugin
+  /// registrado (harness de teste e benchmark do CA02/CA07) ele lança. Nesse
+  /// caso cai no temporário do sistema, que serve igualmente bem para um
+  /// arquivo descartável.
+  static Future<Directory> _tempDirectory() async {
+    try {
+      return await getTemporaryDirectory();
+    } catch (_) {
+      return Directory.systemTemp;
+    }
+  }
+
   static Future<String> _saveTemp(img.Image image,
       {required String suffix}) async {
-    final tmpDir = await getTemporaryDirectory();
+    final tmpDir = await _tempDirectory();
     final outPath = p.join(
       tmpDir.path,
       'ocr_${suffix}_${DateTime.now().microsecondsSinceEpoch}.png',

@@ -24,6 +24,7 @@ class _ScanScreenState extends State<ScanScreen> {
   final TextEditingController _barcodeController = TextEditingController();
   File? _selectedImage;
   bool _isProcessing = false;
+  String _processingStage = 'Analisar Rótulo';
   String? _errorMessage;
   bool _ocrAvailable = false;
 
@@ -92,6 +93,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
     setState(() {
       _isProcessing = true;
+      _processingStage = 'Lendo a imagem...';
       _errorMessage = null;
     });
 
@@ -144,37 +146,35 @@ class _ScanScreenState extends State<ScanScreen> {
         imagePath: _selectedImage!.path,
       );
 
-      // 6. Enriquecimento opcional via backend (Open Food Facts).
-      //    Falha silenciosa se backend offline — usuário ainda vê análise local.
-      EnrichmentBundle? enrichment;
-      final barcodeOptional = _barcodeController.text.trim();
-      try {
-        final enriched = await ApiService.analyzeIngredients(
-          ingredients: ingredientNames,
-          disorders: provider.profile.disorders,
-          customAllergens: provider.profile.customAllergens,
-          barcode: barcodeOptional.isEmpty ? null : barcodeOptional,
-        );
-        enrichment = EnrichmentBundle(
-          officialAllergens: enriched.officialAllergens,
-          product: enriched.product,
-        );
-      } catch (_) {
-        enrichment = null;
-      }
-
-      // 7. Salva no histórico local
+      // 6. Salva no histórico local imediatamente (offline-first).
       provider.addScanResult(result);
+
+      // 7. Enriquecimento opcional via backend — RA-10: NÃO esperamos aqui.
+      //    A chamada é disparada e a Future é entregue ao ResultScreen, que
+      //    abre com o resultado local já pronto e preenche o produto quando (e
+      //    se) o backend responder. Falha ou timeout viram ausência de
+      //    enriquecimento, sem travar a navegação.
+      final barcodeOptional = _barcodeController.text.trim();
+      final Future<EnrichmentBundle?> enrichmentFuture =
+          ApiService.analyzeIngredients(
+        ingredients: ingredientNames,
+        disorders: provider.profile.disorders,
+        customAllergens: provider.profile.customAllergens,
+        barcode: barcodeOptional.isEmpty ? null : barcodeOptional,
+      ).then<EnrichmentBundle?>((enriched) => EnrichmentBundle(
+            officialAllergens: enriched.officialAllergens,
+            product: enriched.product,
+          )).catchError((Object _) => null);
 
       if (!mounted) return;
 
-      // 8. Navega para tela de resultados
+      // 8. Navega para o resultado sem esperar o backend (RA-10).
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => ResultScreen(
             scanResult: result,
-            enrichment: enrichment,
+            enrichmentFuture: enrichmentFuture,
             traceWarnings: traceWarnings,
             lowQualityOcr: outcome.isLowQuality,
           ),
@@ -186,7 +186,10 @@ class _ScanScreenState extends State<ScanScreen> {
       });
     } finally {
       if (mounted) {
-        setState(() => _isProcessing = false);
+        setState(() {
+          _isProcessing = false;
+          _processingStage = 'Analisar Rótulo';
+        });
       }
     }
   }
@@ -259,7 +262,7 @@ class _ScanScreenState extends State<ScanScreen> {
                       child: Text(
                         _errorMessage!,
                         style: const TextStyle(
-                          color: AppTheme.dangerRed,
+                          color: AppTheme.dangerRedText,
                           fontSize: 13,
                         ),
                       ),
@@ -272,7 +275,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
             // Botão de processar
             PrimaryButton(
-              label: _isProcessing ? 'Processando OCR...' : 'Analisar Rótulo',
+              label: _isProcessing ? _processingStage : 'Analisar Rótulo',
               icon: Icons.analytics_outlined,
               onPressed: (_selectedImage != null && !_isProcessing && _ocrAvailable)
                   ? _processImage
@@ -305,8 +308,8 @@ class _ScanScreenState extends State<ScanScreen> {
           Icon(
             _ocrAvailable ? Icons.check_circle : Icons.warning_amber,
             color: _ocrAvailable
-                ? AppTheme.safeGreen
-                : AppTheme.warningYellow,
+                ? AppTheme.safeGreenText
+                : AppTheme.accentOrangeDark,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -318,8 +321,8 @@ class _ScanScreenState extends State<ScanScreen> {
               style: TextStyle(
                 fontSize: 13,
                 color: _ocrAvailable
-                    ? AppTheme.safeGreen
-                    : AppTheme.accentOrange,
+                    ? AppTheme.safeGreenText
+                    : AppTheme.accentOrangeDark,
               ),
             ),
           ),
@@ -361,6 +364,7 @@ class _ScanScreenState extends State<ScanScreen> {
                       child: IconButton(
                         icon: const Icon(Icons.close, color: Colors.white, size: 18),
                         onPressed: () => setState(() => _selectedImage = null),
+                        tooltip: 'Remover imagem',
                         padding: EdgeInsets.zero,
                       ),
                     ),
@@ -371,24 +375,26 @@ class _ScanScreenState extends State<ScanScreen> {
           : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.add_photo_alternate_outlined,
-                  size: 64,
-                  color: Colors.grey.shade400,
+                ExcludeSemantics(
+                  child: Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Text(
+                const Text(
                   'Selecione uma imagem do rótulo',
                   style: TextStyle(
-                    color: Colors.grey.shade600,
+                    color: AppTheme.textSecondary,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   'Use a galeria ou câmera abaixo',
                   style: TextStyle(
-                    color: Colors.grey.shade400,
+                    color: AppTheme.textSecondary,
                     fontSize: 13,
                   ),
                 ),
@@ -447,7 +453,10 @@ class _ScanScreenState extends State<ScanScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Material(
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
       color: AppTheme.surfaceWhite,
       borderRadius: BorderRadius.circular(16),
       elevation: 1,
@@ -470,6 +479,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -513,7 +523,8 @@ class _TipItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.lightbulb_outline, size: 16, color: AppTheme.accentOrange),
+          const Icon(Icons.lightbulb_outline,
+              size: 16, color: AppTheme.accentOrangeDark),
           const SizedBox(width: 6),
           Expanded(
             child: Text(text, style: const TextStyle(fontSize: 13)),

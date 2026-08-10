@@ -7,9 +7,28 @@ class IngredientCard extends StatelessWidget {
 
   const IngredientCard({super.key, required this.ingredient});
 
+  /// Enunciado único para leitor de tela (UC05): o prefixo "Alerta" vem antes
+  /// do nome, para que o risco seja ouvido no primeiro instante do anúncio, e
+  /// o motivo acompanha na mesma frase.
+  String get semanticLabel {
+    if (!ingredient.isFlagged) {
+      return 'Sem alerta: ${ingredient.name}';
+    }
+    final reason = ingredient.flagReason;
+    if (reason == null || reason.isEmpty) {
+      return 'Alerta: ${ingredient.name}';
+    }
+    return 'Alerta: ${ingredient.name}. '
+        'Motivo: ${reason.replaceAll(' · ', '; ')}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Semantics(
+      label: semanticLabel,
+      excludeSemantics: true,
+      container: true,
+      child: Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         color: ingredient.isFlagged
@@ -36,7 +55,9 @@ class IngredientCard extends StatelessWidget {
           style: TextStyle(
             fontWeight:
                 ingredient.isFlagged ? FontWeight.bold : FontWeight.normal,
-            color: ingredient.isFlagged ? AppTheme.dangerRed : AppTheme.textPrimary,
+            color: ingredient.isFlagged
+                ? AppTheme.dangerRedText
+                : AppTheme.textPrimary,
           ),
         ),
         subtitle: ingredient.isFlagged && ingredient.flagReason != null
@@ -50,9 +71,9 @@ class IngredientCard extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           '• $r',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: AppTheme.dangerRed.withValues(alpha: 0.85),
+                            color: AppTheme.dangerRedText,
                           ),
                         ),
                       ),
@@ -81,6 +102,7 @@ class IngredientCard extends StatelessWidget {
                 color: AppTheme.safeGreen,
                 size: 20,
               ),
+      ),
       ),
     );
   }

@@ -1,0 +1,94 @@
+{
+  "description": "Corpus de imagens de rótulo para o CA02 (o OCR retorna texto não vazio) e o CA07 (tempo de OCR). São renderizações sintéticas de listas de ingredientes reais de produtos brasileiros, degradadas para reproduzir condições de captura difíceis. Não substituem fotografias de rótulos reais — ver validation/README.md. Regeneráveis por validation/tools/generate_label_images.sh.",
+  "version": 1,
+  "criterios": {
+    "CA02": "texto não vazio em >= 90% das imagens (>= 9 em 10)",
+    "CA07": "mediana do tempo de OCR <= 5 s em 20 medições"
+  },
+  "imagens": [
+    {
+      "arquivo": "L01.png",
+      "condicao": "leitura limpa (controle)",
+      "termos_esperados": ["farinha de trigo", "soro de leite", "lecitina de soja"],
+      "disorders": ["Doença Celíaca"],
+      "expected_trigger": "trigo"
+    },
+    {
+      "arquivo": "L02.png",
+      "condicao": "rotação de +3°",
+      "termos_esperados": ["leite integral", "lactose"],
+      "disorders": ["Intolerância à Lactose"],
+      "expected_trigger": "leite"
+    },
+    {
+      "arquivo": "L03.png",
+      "condicao": "rotação de -6° sobre fundo acinzentado",
+      "termos_esperados": ["amendoins torrados", "aveia"],
+      "disorders": ["Alergia ao Amendoim"],
+      "expected_trigger": "amendoim"
+    },
+    {
+      "arquivo": "L04.png",
+      "condicao": "desfoque gaussiano (foco imperfeito)",
+      "termos_esperados": ["shoyu", "soja"],
+      "disorders": ["Alergia à Soja"],
+      "expected_trigger": "soja"
+    },
+    {
+      "arquivo": "L05.png",
+      "condicao": "ruído de sensor (pouca luz)",
+      "termos_esperados": ["ovos pasteurizados", "oleo de soja"],
+      "disorders": ["Alergia ao Ovo"],
+      "expected_trigger": "ovo"
+    },
+    {
+      "arquivo": "L06.png",
+      "condicao": "baixo contraste (texto cinza em embalagem clara)",
+      "termos_esperados": ["queijo", "leite pasteurizado"],
+      "disorders": ["Alergia à Proteína do Leite (APLV)"],
+      "expected_trigger": "queijo"
+    },
+    {
+      "arquivo": "L07.jpg",
+      "condicao": "compressão JPEG agressiva (qualidade 25)",
+      "termos_esperados": ["cafeina", "agua gaseificada"],
+      "disorders": ["Refluxo Gastroesofágico (DRGE)"],
+      "expected_trigger": "cafeina"
+    },
+    {
+      "arquivo": "L08.png",
+      "condicao": "rótulo escuro: texto claro sobre fundo preto",
+      "termos_esperados": ["malte de cevada", "lupulo"],
+      "disorders": ["Doença Celíaca"],
+      "expected_trigger": "malte"
+    },
+    {
+      "arquivo": "L09.png",
+      "condicao": "perspectiva (foto tirada de lado)",
+      "termos_esperados": ["sorbitol", "maltitol"],
+      "disorders": ["Síndrome do Intestino Irritável (SII)"],
+      "expected_trigger": "sorbitol"
+    },
+    {
+      "arquivo": "L10.png",
+      "condicao": "fonte pequena (foto de longe)",
+      "termos_esperados": ["leite pasteurizado", "leite em po"],
+      "disorders": ["Intolerância à Lactose"],
+      "expected_trigger": "leite"
+    },
+    {
+      "arquivo": "L11.png",
+      "condicao": "iluminação desigual (sombra lateral)",
+      "termos_esperados": ["leite em po", "lecitina de soja"],
+      "disorders": ["Intolerância à Lactose"],
+      "expected_trigger": "leite"
+    },
+    {
+      "arquivo": "L12.png",
+      "condicao": "fonte condensada com linhas apertadas",
+      "termos_esperados": ["soja", "lecitina de soja"],
+      "disorders": ["Alergia à Soja"],
+      "expected_trigger": "soja"
+    }
+  ]
+}

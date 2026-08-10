@@ -1,16 +1,25 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
+import 'package:flutter/services.dart' show HapticFeedback, SystemSound, SystemSoundType;
 import '../core/disorder_explanations.dart';
 import '../core/theme.dart';
 import '../models/enriched_analysis.dart';
 import '../models/ingredient.dart';
+import '../models/nutrition.dart';
 import '../models/scan_result.dart';
 import '../utils/text_parser.dart';
 import '../widgets/ingredient_card.dart';
+import '../widgets/medical_disclaimer.dart';
 
-class ResultScreen extends StatelessWidget {
+class ResultScreen extends StatefulWidget {
   final ScanResult scanResult;
   final EnrichmentBundle? enrichment;
+
+  /// Enriquecimento assíncrono (RA-10). Quando informado, a tela abre com o
+  /// resultado local já pronto e preenche produto e alérgenos oficiais quando
+  /// esta Future resolve — sem bloquear a navegação esperando o backend.
+  final Future<EnrichmentBundle?>? enrichmentFuture;
   final List<TraceWarning> traceWarnings;
   final bool lowQualityOcr;
 
@@ -18,9 +27,67 @@ class ResultScreen extends StatelessWidget {
     super.key,
     required this.scanResult,
     this.enrichment,
+    this.enrichmentFuture,
     this.traceWarnings = const [],
     this.lowQualityOcr = false,
   });
+
+  @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
+
+class _ResultScreenState extends State<ResultScreen> {
+  EnrichmentBundle? _enrichment;
+  bool _enrichmentPending = false;
+  bool _feedbackFired = false;
+
+  // Getters mantêm o corpo dos métodos _build* inalterado após a conversão
+  // para StatefulWidget.
+  ScanResult get scanResult => widget.scanResult;
+  EnrichmentBundle? get enrichment => _enrichment;
+  List<TraceWarning> get traceWarnings => widget.traceWarnings;
+  bool get lowQualityOcr => widget.lowQualityOcr;
+
+  @override
+  void initState() {
+    super.initState();
+    _enrichment = widget.enrichment;
+
+    // RA-10: não esperamos o backend antes de mostrar o resultado. Se veio uma
+    // Future de enriquecimento, o resultado local já está na tela e o produto
+    // aparece quando (e se) o backend responder.
+    final future = widget.enrichmentFuture;
+    if (future != null) {
+      _enrichmentPending = true;
+      future.then((bundle) {
+        if (!mounted) return;
+        setState(() {
+          _enrichment = bundle;
+          _enrichmentPending = false;
+        });
+      }).catchError((_) {
+        if (!mounted) return;
+        setState(() => _enrichmentPending = false);
+      });
+    }
+
+    // RF21: reforço tátil e sonoro quando há alerta, para quem não olha a tela.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fireAlertFeedback());
+  }
+
+  void _fireAlertFeedback() {
+    if (_feedbackFired) return;
+    _feedbackFired = true;
+    final dangerous = widget.scanResult.flaggedIngredients.isNotEmpty ||
+        widget.traceWarnings.isNotEmpty;
+    if (!dangerous) return;
+    try {
+      HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.alert);
+    } catch (_) {
+      // Plataforma sem suporte (desktop/testes) — silencioso por desenho.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +99,19 @@ class ResultScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildStatusBanner(),
+            // Ordem de anúncio para leitor de tela (UC05): situação geral,
+            // aviso de não-substituição, e só então o detalhe da análise.
+            Semantics(
+              sortKey: const OrdinalSortKey(0),
+              child: _buildStatusBanner(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Semantics(
+                sortKey: const OrdinalSortKey(1),
+                child: const MedicalDisclaimer(),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -43,6 +122,14 @@ class ResultScreen extends StatelessWidget {
 
                   if (lowQualityOcr) ...[
                     _buildLowQualityNotice(),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // RA-10: enquanto o backend responde, o resultado local já
+                  // está visível; aqui só sinalizamos que o produto está a
+                  // caminho, sem bloquear a tela.
+                  if (_enrichmentPending) ...[
+                    _buildEnrichmentPending(),
                     const SizedBox(height: 20),
                   ],
 
@@ -75,7 +162,7 @@ class ResultScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.dangerRed,
+                        color: AppTheme.dangerRedText,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -139,13 +226,24 @@ class ResultScreen extends StatelessWidget {
         ? partes.join(' · ')
         : 'Nenhum problema detectado para seu perfil';
 
-    return Container(
+    final title = isDangerous
+        ? 'Atenção! Alertas Detectados'
+        : 'Tudo Certo! Nenhum Alerta';
+
+    return Semantics(
+      header: true,
+      liveRegion: true,
+      excludeSemantics: true,
+      label: isDangerous
+          ? 'Alerta: $title. $subtitle.'
+          : '$title. $subtitle.',
+      child: Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDangerous
-              ? [AppTheme.dangerRed, AppTheme.dangerRed.withValues(alpha: 0.8)]
-              : [AppTheme.safeGreen, AppTheme.safeGreen.withValues(alpha: 0.8)],
+              ? [AppTheme.dangerRed, AppTheme.dangerRedText]
+              : [AppTheme.primaryGreen, AppTheme.primaryGreenDark],
         ),
       ),
       child: Row(
@@ -163,9 +261,7 @@ class ResultScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isDangerous
-                      ? 'Atenção! Alertas Detectados'
-                      : 'Tudo Certo! Nenhum Alerta',
+                  title,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -175,12 +271,13 @@ class ResultScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
               ],
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -188,14 +285,18 @@ class ResultScreen extends StatelessWidget {
   Widget _buildImagePreview() {
     final file = File(scanResult.imagePath!);
     if (!file.existsSync()) return const SizedBox.shrink();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Image.file(
-        file,
-        height: 180,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    return Semantics(
+      image: true,
+      label: 'Foto do rótulo analisado',
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.file(
+          file,
+          height: 180,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
       ),
     );
   }
@@ -211,7 +312,10 @@ class ResultScreen extends StatelessWidget {
             Row(
               children: [
                 if (product.imageUrl != null)
-                  ClipRRect(
+                  Semantics(
+                    image: true,
+                    label: 'Foto do produto identificado',
+                    child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.network(
                       product.imageUrl!,
@@ -222,6 +326,7 @@ class ResultScreen extends StatelessWidget {
                         width: 64,
                         height: 64,
                         child: Icon(Icons.fastfood_outlined, size: 32),
+                      ),
                       ),
                     ),
                   ),
@@ -263,6 +368,113 @@ class ResultScreen extends StatelessWidget {
                   _buildNovaBadge(product.novaGroup!),
               ],
             ),
+            // RF13: tabela nutricional detalhada (por 100 g), quando a Open
+            // Food Facts a fornece.
+            if (product.nutriments != null &&
+                _hasAnyNutrient(product.nutriments!)) ...[
+              const SizedBox(height: 16),
+              _buildNutritionTable(product.nutriments!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static bool _hasAnyNutrient(NutritionInfo n) =>
+      [n.calories, n.carbohydrates, n.sugars, n.fiber, n.protein, n.totalFat,
+              n.saturatedFat, n.sodium]
+          .any((v) => v != null);
+
+  /// RF13 — Informação nutricional por 100 g, com tipografia escalável (herda
+  /// o `textScaler` do RF18). Valores ausentes aparecem como "—".
+  Widget _buildNutritionTable(NutritionInfo n) {
+    String fmt(double? v, String unit) {
+      if (v == null) return '—';
+      final s = v == v.roundToDouble()
+          ? v.toStringAsFixed(0)
+          : v.toStringAsFixed(1);
+      return '$s $unit';
+    }
+
+    final rows = <List<String>>[
+      ['Valor energético', fmt(n.calories, 'kcal')],
+      ['Carboidratos', fmt(n.carbohydrates, 'g')],
+      ['   dos quais açúcares', fmt(n.sugars, 'g')],
+      ['Fibras', fmt(n.fiber, 'g')],
+      ['Proteínas', fmt(n.protein, 'g')],
+      ['Gorduras totais', fmt(n.totalFat, 'g')],
+      ['   das quais saturadas', fmt(n.saturatedFat, 'g')],
+      ['Sódio', fmt(n.sodium, 'g')],
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: const Text(
+            'Informação nutricional (por 100 g)',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...rows.map(
+          (r) => Semantics(
+            excludeSemantics: true,
+            container: true,
+            label: '${r[0].trim()}: ${r[1]}',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(r[0],
+                        style: const TextStyle(
+                            fontSize: 13, color: AppTheme.textPrimary)),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(r[1],
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnrichmentPending() {
+    return Semantics(
+      liveRegion: true,
+      label: 'Consultando dados do produto no servidor',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryGreen.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.2)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Consultando dados do produto (Nutri-Score, NOVA, alérgenos '
+                'oficiais)… O resultado abaixo já está pronto.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ),
           ],
         ),
       ),
@@ -278,6 +490,10 @@ class ResultScreen extends StatelessWidget {
       'e': const Color(0xFFE63E11),
     };
     final color = colors[grade.toLowerCase()] ?? Colors.grey;
+    // As faixas oficiais do Nutri-Score vão do verde-escuro ao amarelo. Manter
+    // texto branco em todas reprovaria o contraste nas claras (C e D); a cor
+    // do rótulo é escolhida pela que contrasta melhor com a faixa.
+    final onColor = _readableOn(color);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -287,20 +503,28 @@ class ResultScreen extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Nutri-Score',
+          Text('Nutri-Score',
               style: TextStyle(
-                  color: Colors.white,
+                  color: onColor,
                   fontSize: 11,
                   fontWeight: FontWeight.w600)),
           const SizedBox(width: 6),
           Text(grade.toUpperCase(),
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: onColor,
                   fontSize: 13,
                   fontWeight: FontWeight.bold)),
         ],
       ),
     );
+  }
+
+  /// Preto ou branco — o que render mais contraste sobre `background`.
+  static Color _readableOn(Color background) {
+    final l = background.computeLuminance();
+    final comBranco = 1.05 / (l + 0.05);
+    final comPreto = (l + 0.05) / 0.05;
+    return comBranco >= comPreto ? Colors.white : AppTheme.textPrimary;
   }
 
   Widget _buildNovaBadge(int nova) {
@@ -311,10 +535,10 @@ class ResultScreen extends StatelessWidget {
       4: 'Ultraprocessado',
     };
     final color = nova >= 4
-        ? AppTheme.dangerRed
+        ? AppTheme.dangerRedText
         : nova == 3
-            ? AppTheme.accentOrange
-            : AppTheme.safeGreen;
+            ? AppTheme.accentOrangeDark
+            : AppTheme.safeGreenText;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -343,7 +567,7 @@ class ResultScreen extends StatelessWidget {
           const Row(
             children: [
               Icon(Icons.warning_amber_rounded,
-                  color: AppTheme.accentOrange, size: 22),
+                  color: AppTheme.accentOrangeDark, size: 22),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -351,7 +575,7 @@ class ResultScreen extends StatelessWidget {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: AppTheme.accentOrange),
+                      color: AppTheme.accentOrangeDark),
                 ),
               ),
             ],
@@ -363,14 +587,19 @@ class ResultScreen extends StatelessWidget {
             style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 10),
-          ...warnings.map((w) => Padding(
+          ...warnings.map((w) => Semantics(
+                label: 'Pode conter ${w.term}. '
+                    'Afeta: ${w.disorders.join(", ")}.',
+                excludeSemantics: true,
+                container: true,
+                child: Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('• ',
                         style: TextStyle(
-                            color: AppTheme.accentOrange,
+                            color: AppTheme.accentOrangeDark,
                             fontWeight: FontWeight.bold)),
                     Expanded(
                       child: Text.rich(
@@ -392,6 +621,7 @@ class ResultScreen extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
                 ),
               )),
         ],
@@ -428,7 +658,7 @@ class ResultScreen extends StatelessWidget {
           const Row(
             children: [
               Icon(Icons.lightbulb_outline,
-                  color: AppTheme.dangerRed, size: 22),
+                  color: AppTheme.dangerRedText, size: 22),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -436,7 +666,7 @@ class ResultScreen extends StatelessWidget {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: AppTheme.dangerRed),
+                      color: AppTheme.dangerRedText),
                 ),
               ),
             ],
@@ -475,7 +705,7 @@ class ResultScreen extends StatelessWidget {
             children: [
               Icon(
                 explanation?.icon ?? Icons.warning_amber_rounded,
-                color: AppTheme.dangerRed,
+                color: AppTheme.dangerRedText,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -506,7 +736,7 @@ class ResultScreen extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.dangerRed),
+                      color: AppTheme.dangerRedText),
                 ),
               ],
             ),
@@ -546,7 +776,7 @@ class ResultScreen extends StatelessWidget {
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: AppTheme.accentOrange, size: 22),
+          Icon(Icons.info_outline, color: AppTheme.accentOrangeDark, size: 22),
           SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -557,7 +787,7 @@ class ResultScreen extends StatelessWidget {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: AppTheme.accentOrange),
+                      color: AppTheme.accentOrangeDark),
                 ),
                 SizedBox(height: 2),
                 Text(
@@ -587,14 +817,16 @@ class ResultScreen extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(Icons.gpp_bad, color: AppTheme.dangerRed, size: 22),
+              Icon(Icons.gpp_bad, color: AppTheme.dangerRedText, size: 22),
               SizedBox(width: 8),
-              Text(
-                'Alérgenos oficiais (Open Food Facts)',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppTheme.dangerRed),
+              Expanded(
+                child: Text(
+                  'Alérgenos oficiais (Open Food Facts)',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.dangerRedText),
+                ),
               ),
             ],
           ),
@@ -638,14 +870,14 @@ class ResultScreen extends StatelessWidget {
               value:
                   '${scanResult.totalIngredients - scanResult.flaggedIngredients.length}',
               label: 'Seguros',
-              color: AppTheme.safeGreen,
+              color: AppTheme.safeGreenText,
             ),
             Container(width: 1, height: 40, color: Colors.grey.shade300),
             _buildStat(
               icon: Icons.warning,
               value: '${scanResult.flaggedIngredients.length}',
               label: 'Alertas',
-              color: AppTheme.dangerRed,
+              color: AppTheme.dangerRedText,
             ),
           ],
         ),
@@ -659,7 +891,11 @@ class ResultScreen extends StatelessWidget {
     required String label,
     required Color color,
   }) {
-    return Column(
+    return Semantics(
+      label: '$label: $value',
+      excludeSemantics: true,
+      container: true,
+      child: Column(
       children: [
         Icon(icon, color: color, size: 24),
         const SizedBox(height: 4),
@@ -670,6 +906,7 @@ class ResultScreen extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 12, color: AppTheme.textSecondary)),
       ],
+      ),
     );
   }
 

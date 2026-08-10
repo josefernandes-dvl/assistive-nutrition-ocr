@@ -1,0 +1,469 @@
+{
+  "description": "Corpus rotulado para medição de recall da RN01 (CA03). Cada caso traz: `raw_text`, o texto do rótulo como sai do OCR (entrada do pipeline completo do app); `ingredients`, a lista como o app a envia ao backend — ou seja, já extraída (RF09) e corrigida por dicionário (RF24), que é uma etapa exclusiva do dispositivo; o perfil do usuário; e o gatilho que precisa ser sinalizado. Os textos reproduzem a redação típica de rótulos brasileiros (RDC 727/2022), incluindo sinônimos técnicos, formas no plural e erros de leitura de uma letra.",
+  "version": 1,
+  "criterio": "CA03 — recall >= 85% (pelo menos 17 dos 20 casos positivos)",
+  "positivos": [
+    {
+      "id": "P01",
+      "produto": "Biscoito recheado",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: FARINHA DE TRIGO ENRIQUECIDA COM FERRO E ÁCIDO FÓLICO, AÇÚCAR, GORDURA VEGETAL, AMIDO DE MILHO, CACAU EM PÓ, SAL, FERMENTOS QUÍMICOS (BICARBONATO DE SÓDIO), EMULSIFICANTE LECITINA DE SOJA E AROMATIZANTE. INFORMAÇÃO NUTRICIONAL: PORÇÃO DE 30G",
+      "ingredients": [
+        "Farinha de trigo enriquecida com ferro e ácido fólico",
+        "Açúcar",
+        "Gordura vegetal",
+        "Amido de milho",
+        "Cacau em pó",
+        "Sal",
+        "Fermentos químicos (bicarbonato de sódio)",
+        "Emulsificante lecitina de soja",
+        "Aromatizante"
+      ],
+      "expected_trigger": "trigo",
+      "expected_disorder": "Doença Celíaca"
+    },
+    {
+      "id": "P02",
+      "produto": "Leite condensado",
+      "disorders": [
+        "Intolerância à Lactose"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: LEITE INTEGRAL, AÇÚCAR E LACTOSE. NÃO CONTÉM GLÚTEN. CONSERVAR EM LOCAL SECO.",
+      "ingredients": [
+        "Leite integral",
+        "Açúcar",
+        "Lactose"
+      ],
+      "expected_trigger": "leite",
+      "expected_disorder": "Intolerância à Lactose"
+    },
+    {
+      "id": "P03",
+      "produto": "Barra de cereal",
+      "disorders": [
+        "Alergia ao Amendoim"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: AVEIA EM FLOCOS, XAROPE DE GLICOSE, AMENDOINS TORRADOS, MEL, ÓLEO DE GIRASSOL, SAL.",
+      "ingredients": [
+        "Aveia em flocos",
+        "Xarope de glicose",
+        "Amendoins torrados",
+        "Mel",
+        "Óleo de girassol",
+        "Sal"
+      ],
+      "expected_trigger": "amendoim",
+      "expected_disorder": "Alergia ao Amendoim",
+      "observacao": "Gatilho no plural — exercita a flexão da RN01 (CA16) em rótulo real."
+    },
+    {
+      "id": "P04",
+      "produto": "Molho oriental",
+      "disorders": [
+        "Alergia à Soja"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÁGUA, SHOYU (ÁGUA, SAL, GRÃO DE SOJA, TRIGO), AÇÚCAR, VINAGRE DE ÁLCOOL, AMIDO MODIFICADO, CONSERVADOR BENZOATO DE SÓDIO.",
+      "ingredients": [
+        "Água",
+        "Shoyu (água, sal, grão de soja, trigo)",
+        "Açúcar",
+        "Vinagre de álcool",
+        "Amido modificado",
+        "Conservador benzoato de sódio"
+      ],
+      "expected_trigger": "shoyu",
+      "expected_disorder": "Alergia à Soja",
+      "observacao": "Sinônimo técnico: o alérgeno aparece como nome do produto, não como 'soja'."
+    },
+    {
+      "id": "P05",
+      "produto": "Maionese tradicional",
+      "disorders": [
+        "Alergia ao Ovo"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÓLEO DE SOJA, ÁGUA, OVOS PASTEURIZADOS, VINAGRE, AÇÚCAR, SAL, SUCO DE LIMÃO, ACIDULANTE ÁCIDO CÍTRICO. PODE CONTER LEITE.",
+      "ingredients": [
+        "Óleo de soja",
+        "Água",
+        "Ovos pasteurizados",
+        "Vinagre",
+        "Açúcar",
+        "Sal",
+        "Suco de limão",
+        "Acidulante ácido cítrico"
+      ],
+      "expected_trigger": "ovo",
+      "expected_disorder": "Alergia ao Ovo"
+    },
+    {
+      "id": "P06",
+      "produto": "Queijo ralado",
+      "disorders": [
+        "Alergia à Proteína do Leite (APLV)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: QUEIJO PARMESÃO (LEITE PASTEURIZADO, SAL, COALHO, FERMENTO LÁCTEO), ANTIUMECTANTE AMIDO DE MANDIOCA.",
+      "ingredients": [
+        "Queijo parmesão (leite pasteurizado, sal, coalho, fermento láctico)",
+        "Antiumectante amido de mandioca"
+      ],
+      "expected_trigger": "queijo",
+      "expected_disorder": "Alergia à Proteína do Leite (APLV)"
+    },
+    {
+      "id": "P07",
+      "produto": "Refrigerante de cola",
+      "disorders": [
+        "Refluxo Gastroesofágico (DRGE)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÁGUA GASEIFICADA, AÇÚCAR, EXTRATO DE NOZ DE COLA, CAFEÍNA, CORANTE CARAMELO IV, ACIDULANTE ÁCIDO FOSFÓRICO, AROMATIZANTE NATURAL.",
+      "ingredients": [
+        "Água gaseificada",
+        "Açúcar",
+        "Extrato de noz de cola",
+        "Cafeína",
+        "Corante caramelo IV",
+        "Acidulante ácido fosfórico",
+        "Aromatizante natural"
+      ],
+      "expected_trigger": "cafeina",
+      "expected_disorder": "Refluxo Gastroesofágico (DRGE)"
+    },
+    {
+      "id": "P08",
+      "produto": "Cerveja pilsen",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÁGUA, MALTE DE CEVADA, CEREAIS NÃO MALTEADOS, LÚPULO E ANTIOXIDANTE INS 224.",
+      "ingredients": [
+        "Água",
+        "Malte de cevada",
+        "Cereais não malteados",
+        "Lúpulo",
+        "Antioxidante INS 224"
+      ],
+      "expected_trigger": "malte",
+      "expected_disorder": "Doença Celíaca"
+    },
+    {
+      "id": "P09",
+      "produto": "Bala sem açúcar",
+      "disorders": [
+        "Síndrome do Intestino Irritável (SII)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: EDULCORANTES SORBITOL E MALTITOL, ÁGUA, ACIDULANTE ÁCIDO CÍTRICO, AROMA IDÊNTICO AO NATURAL. O CONSUMO EXCESSIVO PODE CAUSAR EFEITO LAXATIVO.",
+      "ingredients": [
+        "Edulcorantes sorbitol e maltitol",
+        "Água",
+        "Acidulante ácido cítrico",
+        "Aroma idêntico ao natural"
+      ],
+      "expected_trigger": "sorbitol",
+      "expected_disorder": "Síndrome do Intestino Irritável (SII)"
+    },
+    {
+      "id": "P10",
+      "produto": "Iogurte natural",
+      "disorders": [
+        "Intolerância à Lactose"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: LEITE PASTEURIZADO DESNATADO, LEITE EM PÓ DESNATADO E FERMENTO LÁCTEO. INFORMAÇÃO NUTRICIONAL POR PORÇÃO.",
+      "ingredients": [
+        "Leite pasteurizado desnatado",
+        "Leite em pó desnatado",
+        "Fermento lácteo"
+      ],
+      "expected_trigger": "leite",
+      "expected_disorder": "Intolerância à Lactose"
+    },
+    {
+      "id": "P11",
+      "produto": "Chocolate ao leite",
+      "disorders": [
+        "Refluxo Gastroesofágico (DRGE)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: AÇÚCAR, MANTEIGA DE CACAU, LEITE EM PÓ INTEGRAL, MASSA DE CACAU, CHOCOLATE, EMULSIFICANTE LECITINA DE SOJA, AROMATIZANTE. ALÉRGICOS: CONTÉM DERIVADOS DE LEITE E SOJA.",
+      "ingredients": [
+        "Açúcar",
+        "Manteiga de cacau",
+        "Leite em pó integral",
+        "Massa de cacau",
+        "Chocolate",
+        "Emulsificante lecitina de soja",
+        "Aromatizante"
+      ],
+      "expected_trigger": "chocolate",
+      "expected_disorder": "Refluxo Gastroesofágico (DRGE)"
+    },
+    {
+      "id": "P12",
+      "produto": "Pão de forma",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: FARINHAS DE TRIGO ENRIQUECIDAS COM FERRO E ÁCIDO FÓLICO, ÁGUA, AÇÚCAR, GLÚTEN, FERMENTO BIOLÓGICO, SAL, CONSERVADOR PROPIONATO DE CÁLCIO.",
+      "ingredients": [
+        "Farinhas de trigo enriquecidas com ferro e ácido fólico",
+        "Água",
+        "Açúcar",
+        "Glúten",
+        "Fermento biológico",
+        "Sal",
+        "Conservador propionato de cálcio"
+      ],
+      "expected_trigger": "trigo",
+      "expected_disorder": "Doença Celíaca",
+      "observacao": "Gatilho no plural dentro de expressão composta (CA16)."
+    },
+    {
+      "id": "P13",
+      "produto": "Sorvete de creme",
+      "disorders": [
+        "Alergia à Proteína do Leite (APLV)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÁGUA, AÇÚCAR, SORO DE LEITE EM PÓ, GORDURA VEGETAL, ESTABILIZANTES (INS 471, INS 412), EMULSIFICANTE INS 322, AROMATIZANTE.",
+      "ingredients": [
+        "Água",
+        "Açúcar",
+        "Soro de leite em pó",
+        "Gordura vegetal",
+        "Estabilizantes (INS 471, INS 412)",
+        "Emulsificante INS 322",
+        "Aromatizante"
+      ],
+      "expected_trigger": "soro de leite",
+      "expected_disorder": "Alergia à Proteína do Leite (APLV)"
+    },
+    {
+      "id": "P14",
+      "produto": "Mistura para bolo (leitura ruim)",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: FAR1NHA DE TR1GO ENRIQUECIDA, AÇUCAR, AMIDO DE MILHO, FERMENTO QUIMICO, SAL, AROMATIZANTE.",
+      "ingredients": [
+        "Farinha de trigo enriquecida",
+        "Açúcar",
+        "Amido de milho",
+        "Fermento químico",
+        "Sal",
+        "Aromatizante"
+      ],
+      "expected_trigger": "trigo",
+      "expected_disorder": "Doença Celíaca",
+      "observacao": "Erro típico de OCR (1 no lugar de i) em `raw_text`. A correção por dicionário (RF24) roda no dispositivo; `ingredients` mostra o que o backend recebe depois dela."
+    },
+    {
+      "id": "P15",
+      "produto": "Achocolatado em pó",
+      "disorders": [
+        "Intolerância à Lactose"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: AÇÚCAR, CACAU EM PÓ, LEITE EM PÓ, EXTRATO DE MALTE, VITAMINAS E MINERAIS, SAL, AROMATIZANTE.",
+      "ingredients": [
+        "Açúcar",
+        "Cacau em pó",
+        "Leite em pó",
+        "Extrato de malte",
+        "Vitaminas e minerais",
+        "Sal",
+        "Aromatizante"
+      ],
+      "expected_trigger": "leite em po",
+      "expected_disorder": "Intolerância à Lactose"
+    },
+    {
+      "id": "P16",
+      "produto": "Salgadinho de milho",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: MILHO, ÓLEO VEGETAL, SAL, EXTRATO DE MALTE, REALÇADOR DE SABOR GLUTAMATO MONOSSÓDICO, AROMATIZANTE.",
+      "ingredients": [
+        "Milho",
+        "Óleo vegetal",
+        "Sal",
+        "Extrato de malte",
+        "Realçador de sabor glutamato monossódico",
+        "Aromatizante"
+      ],
+      "expected_trigger": "extrato de malte",
+      "expected_disorder": "Doença Celíaca",
+      "observacao": "Fonte oculta de glúten: 'extrato de malte' não contém a palavra trigo nem glúten."
+    },
+    {
+      "id": "P17",
+      "produto": "Néctar de fruta",
+      "disorders": [
+        "Intolerância à Frutose"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÁGUA, SUCO CONCENTRADO DE UVA, XAROPE DE MILHO, ACIDULANTE ÁCIDO CÍTRICO, CONSERVADOR SORBATO DE POTÁSSIO.",
+      "ingredients": [
+        "Água",
+        "Suco concentrado de uva",
+        "Xarope de milho",
+        "Acidulante ácido cítrico",
+        "Conservador sorbato de potássio"
+      ],
+      "expected_trigger": "xarope de milho",
+      "expected_disorder": "Intolerância à Frutose"
+    },
+    {
+      "id": "P18",
+      "produto": "Requeijão cremoso",
+      "disorders": [
+        "Alergia à Proteína do Leite (APLV)"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: CREME DE LEITE, MASSA COALHADA, ÁGUA, SAL, ESTABILIZANTES E CONSERVADOR SORBATO DE POTÁSSIO.",
+      "ingredients": [
+        "Creme de leite",
+        "Massa coalhada",
+        "Água",
+        "Sal",
+        "Estabilizantes",
+        "Conservador sorbato de potássio"
+      ],
+      "expected_trigger": "creme de leite",
+      "expected_disorder": "Alergia à Proteína do Leite (APLV)"
+    },
+    {
+      "id": "P19",
+      "produto": "Margarina cremosa",
+      "disorders": [
+        "Alergia à Soja"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ÓLEOS VEGETAIS LÍQUIDO E INTERESTERIFICADO DE SOJA, ÁGUA, SAL, EMULSIFICANTES LECITINA DE SOJA E MONO E DIGLICERÍDEOS DE ÁCIDOS GRAXOS, CONSERVADOR BENZOATO DE SÓDIO, AROMATIZANTE, CORANTE URUCUM.",
+      "ingredients": [
+        "Óleos vegetais líquido e interesterificado de soja",
+        "Água",
+        "Sal",
+        "Emulsificantes lecitina de soja e mono e diglicerídeos de ácidos graxos",
+        "Conservador benzoato de sódio",
+        "Aromatizante",
+        "Corante urucum"
+      ],
+      "expected_trigger": "soja",
+      "expected_disorder": "Alergia à Soja"
+    },
+    {
+      "id": "P20",
+      "produto": "Tempero pronto",
+      "disorders": [
+        "Síndrome do Intestino Irritável (SII)"
+      ],
+      "custom_allergens": [
+        "mostarda"
+      ],
+      "raw_text": "INGREDIENTES: SAL, ALHO DESIDRATADO, CEBOLA DESIDRATADA, SALSA DESIDRATADA, PIMENTA-DO-REINO, MOSTARDA EM PÓ.",
+      "ingredients": [
+        "Sal",
+        "Alho desidratado",
+        "Cebola desidratada",
+        "Salsa desidratada",
+        "Pimenta-do-reino",
+        "Mostarda em pó"
+      ],
+      "expected_trigger": "alho",
+      "expected_disorder": "Síndrome do Intestino Irritável (SII)",
+      "observacao": "O mesmo rótulo traz 'salsa' e 'sal' — não pode gerar falso positivo cruzado (CA11)."
+    }
+  ],
+  "negativos": [
+    {
+      "id": "N01",
+      "produto": "Água mineral",
+      "disorders": [
+        "Doença Celíaca",
+        "Intolerância à Lactose"
+      ],
+      "custom_allergens": [],
+      "raw_text": "COMPOSIÇÃO QUÍMICA PROVÁVEL: BICARBONATO DE CÁLCIO, SULFATO DE SÓDIO, FLUORETOS.",
+      "ingredients": [
+        "Bicarbonato de cálcio",
+        "Sulfato de sódio",
+        "Fluoretos"
+      ]
+    },
+    {
+      "id": "N02",
+      "produto": "Arroz polido",
+      "disorders": [
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: ARROZ BENEFICIADO POLIDO TIPO 1.",
+      "ingredients": [
+        "Arroz beneficiado polido tipo 1"
+      ]
+    },
+    {
+      "id": "N03",
+      "produto": "Tempero de salsa (armadilha de substring)",
+      "disorders": [],
+      "custom_allergens": [
+        "sal",
+        "ovo"
+      ],
+      "raw_text": "INGREDIENTES: SALSA DESIDRATADA, SALSÃO DESIDRATADO, SABOR NOVO DE ERVAS.",
+      "ingredients": [
+        "Salsa desidratada",
+        "Salsão desidratado",
+        "Sabor novo de ervas"
+      ]
+    },
+    {
+      "id": "N04",
+      "produto": "Azeite de oliva",
+      "disorders": [
+        "Alergia à Soja",
+        "Alergia ao Amendoim"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: AZEITE DE OLIVA EXTRA VIRGEM. ACIDEZ MÁXIMA 0,5%.",
+      "ingredients": [
+        "Azeite de oliva extra virgem"
+      ]
+    },
+    {
+      "id": "N05",
+      "produto": "Refresco em pó (armadilha da correção por dicionário)",
+      "disorders": [
+        "Síndrome do Intestino Irritável (SII)",
+        "FODMAP Sensível",
+        "Doença Celíaca"
+      ],
+      "custom_allergens": [],
+      "raw_text": "INGREDIENTES: AÇÚCAR, ACIDULANTE ÁCIDO CÍTRICO, CONSERVADOR SORBATO DE POTÁSSIO, VITAMINA C, ÁCIDO FÓLICO, CORANTE NATURAL DE URUCUM.",
+      "ingredients": [
+        "Açúcar",
+        "Acidulante ácido cítrico",
+        "Conservador sorbato de potássio",
+        "Vitamina C",
+        "Ácido fólico",
+        "Corante natural de urucum"
+      ],
+      "observacao": "Nenhum destes é gatilho. 'sorbato' fica a duas edições de 'sorbitol' e 'ácido' a uma de 'amido': a correção por dicionário (RF24) não pode transformá-los em gatilho."
+    }
+  ]
+}

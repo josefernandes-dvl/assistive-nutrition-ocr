@@ -1,18 +1,37 @@
 const axios = require('axios');
 const NodeCache = require('node-cache');
 
-const BASE_URL = 'https://world.openfoodfacts.org';
+const DEFAULT_BASE_URL = 'https://world.openfoodfacts.org';
 const USER_AGENT = 'NutriScan-IC/1.0 (assistive-nutrition-ocr; contato: projeto-ic)';
+
+/**
+ * Orçamento de tempo da consulta por código de barras.
+ *
+ * O CA12 exige resposta em até 5 s com o servidor ativo. Como a consulta à
+ * Open Food Facts é a única etapa de rede da rota, o timeout fica abaixo desse
+ * teto: é melhor devolver "não consegui consultar agora" dentro do orçamento
+ * do que segurar o usuário no supermercado esperando (RNF18 — a análise local
+ * continua valendo sem o enriquecimento).
+ */
+const PRODUCT_TIMEOUT_MS = Number(process.env.OFF_PRODUCT_TIMEOUT_MS || 4000);
+const SEARCH_TIMEOUT_MS = Number(process.env.OFF_SEARCH_TIMEOUT_MS || 8000);
 
 // Cache em memória: 1h para produtos, 5min para buscas
 const productCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
 const searchCache = new NodeCache({ stdTTL: 300, checkperiod: 120 });
 
-const client = axios.create({
-  baseURL: BASE_URL,
-  timeout: 8000,
-  headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-});
+/** Base resolvida a cada chamada — permite apontar para um stub em teste. */
+function baseUrl() {
+  return process.env.OFF_BASE_URL || DEFAULT_BASE_URL;
+}
+
+function client(timeout) {
+  return axios.create({
+    baseURL: baseUrl(),
+    timeout,
+    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+  });
+}
 
 /**
  * Busca um produto por código de barras (EAN/UPC).
@@ -26,7 +45,9 @@ async function getProductByBarcode(barcode) {
   if (cached !== undefined) return cached;
 
   try {
-    const { data } = await client.get(`/api/v2/product/${code}.json`);
+    const { data } = await client(PRODUCT_TIMEOUT_MS).get(
+      `/api/v2/product/${code}.json`
+    );
     if (data.status !== 1 || !data.product) {
       productCache.set(code, null);
       return null;
@@ -54,7 +75,7 @@ async function searchProductsByText(query, limit = 5) {
   if (cached !== undefined) return cached;
 
   try {
-    const { data } = await client.get('/cgi/search.pl', {
+    const { data } = await client(SEARCH_TIMEOUT_MS).get('/cgi/search.pl', {
       params: {
         search_terms: q,
         search_simple: 1,
@@ -109,7 +130,15 @@ function numOr(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Limpa o cache — usado pelos testes para medir o caminho sem cache. */
+function clearCache() {
+  productCache.flushAll();
+  searchCache.flushAll();
+}
+
 module.exports = {
   getProductByBarcode,
   searchProductsByText,
+  clearCache,
+  PRODUCT_TIMEOUT_MS,
 };

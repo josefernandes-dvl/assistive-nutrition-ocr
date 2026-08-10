@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'mobile/**'
+      - 'validation/**'
       - '.github/workflows/mobile-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'mobile/**'
+      - 'validation/**'
       - '.github/workflows/mobile-ci.yml'
 
 jobs:
@@ -21,6 +23,14 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+
+      # Motor de OCR usado pela medição de CA02/CA07. Sem ele os dois testes
+      # se marcam como pulados em vez de falhar — e o critério deixaria de ser
+      # verificado sem que ninguém percebesse.
+      - name: Install Tesseract (pt-BR)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-por
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2

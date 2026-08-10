@@ -22,7 +22,11 @@ router.post('/', async (req, res) => {
     const existing = await UserProfile.findOne().sort({ createdAt: -1 });
 
     if (existing) {
-      existing.name = req.body.name;
+      // RNF15 — nome é opcional: só sobrescreve se vier preenchido no corpo,
+      // evitando apagar um nome já existente quando o cliente o omite.
+      if (req.body.name !== undefined && req.body.name !== null) {
+        existing.name = req.body.name;
+      }
       existing.disorders = req.body.disorders;
       existing.custom_allergens = req.body.custom_allergens || [];
       const saved = await existing.save();

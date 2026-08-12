@@ -190,12 +190,13 @@ class HomeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: AppTheme.surfaceWhite,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
-                const Icon(Icons.local_hospital, color: Colors.white, size: 40),
+                const Icon(Icons.local_hospital,
+                    color: AppTheme.primaryGreen, size: 40),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -204,7 +205,7 @@ class HomeScreen extends StatelessWidget {
                       const Text(
                         'Gestão de Distúrbios Digestivos',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
@@ -212,10 +213,10 @@ class HomeScreen extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         provider.hasProfile
-                            ? '${provider.profile.disorders.length} condição(ões) monitorada(s)'
+                            ? '${provider.profile.disorders.length + provider.profile.customAllergens.length} item(ns) monitorado(s)'
                             : 'Configure seu perfil para começar',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -231,7 +232,9 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildProfileStatus(BuildContext context, AppProvider provider) {
-    if (provider.hasProfile && provider.profile.disorders.isNotEmpty) {
+    if (provider.hasProfile &&
+        (provider.profile.disorders.isNotEmpty ||
+            provider.profile.customAllergens.isNotEmpty)) {
       return Card(
         elevation: 1,
         child: Padding(
@@ -259,15 +262,30 @@ class HomeScreen extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: provider.profile.disorders.map((d) {
-                  return Chip(
-                    label: Text(d, style: const TextStyle(fontSize: 12)),
-                    backgroundColor:
-                        AppTheme.warningYellow.withValues(alpha: 0.2),
-                    side: BorderSide.none,
-                    visualDensity: VisualDensity.compact,
-                  );
-                }).toList(),
+                children: [
+                  // Distúrbios do catálogo
+                  ...provider.profile.disorders.map((d) {
+                    return Chip(
+                      label: Text(d, style: const TextStyle(fontSize: 12)),
+                      backgroundColor:
+                          AppTheme.warningYellow.withValues(alpha: 0.2),
+                      side: BorderSide.none,
+                      visualDensity: VisualDensity.compact,
+                    );
+                  }),
+                  // Alérgenos personalizados (com ícone para distingui-los)
+                  ...provider.profile.customAllergens.map((a) {
+                    return Chip(
+                      avatar: const Icon(Icons.warning_amber_rounded,
+                          size: 16, color: AppTheme.accentOrangeDark),
+                      label: Text(a, style: const TextStyle(fontSize: 12)),
+                      backgroundColor:
+                          AppTheme.accentOrange.withValues(alpha: 0.15),
+                      side: BorderSide.none,
+                      visualDensity: VisualDensity.compact,
+                    );
+                  }),
+                ],
               ),
             ],
           ),
@@ -426,10 +444,10 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildInfoCard() {
-    return Card(
+    return const Card(
       elevation: 1,
-      color: AppTheme.primaryGreen.withValues(alpha: 0.05),
-      child: const Padding(
+      color: AppTheme.surfaceWhite,
+      child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

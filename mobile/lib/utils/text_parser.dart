@@ -26,27 +26,64 @@ class TextParser {
     RegExp(r'sac\s+(?:n[ºo°]?|n[uú]mero)', caseSensitive: false),
   ];
 
-  /// Regex que captura a seção de "Contém traços / Pode conter".
-  /// Ex.: "CONTÉM TRAÇOS DE LEITE E AMENDOIM", "PODE CONTER SOJA, OVOS".
+  /// Regex da seção precautória "Contém traços / Pode conter" — presença
+  /// possível (contaminação cruzada). Ex.: "CONTÉM TRAÇOS DE LEITE E
+  /// AMENDOIM", "PODE CONTER SOJA, OVOS". A declaração direta "Contém X"
+  /// (presença efetiva) é tratada por [_containsRegex].
   static final RegExp _tracesRegex = RegExp(
-    r'(?:cont[eé]m\s+tra[cç]os?\s+de|pode\s+conter|cont[eé]m\s+derivados\s+de)\s*[:\-]?\s*([^.\n]{1,200})',
+    r'(?:cont[eé]m\s+tra[cç]os?\s+de|pode\s+conter)\s*[:\-]?\s*([^.\n]{1,200})',
     caseSensitive: false,
   );
 
-  /// Extrai a lista de avisos de traços ("contém traços de X, Y").
-  /// Retorna os termos individuais já normalizados (split por vírgula/"e").
+  /// Regex da declaração direta "Contém X" (RDC 26/2015 e Lei 10.674/2003) —
+  /// presença declarada pelo fabricante, alerta mais forte que traço. Cobre
+  /// "CONTÉM GLÚTEN", "CONTÉM LEITE E OVOS", "CONTÉM DERIVADOS DE SOJA".
+  ///
+  /// O lookahead `(?!tra[cç]os?)` deixa "contém traços de" seguir como traço.
+  /// A negativa contra "não contém" (declaração de AUSÊNCIA, como "NÃO CONTÉM
+  /// GLÚTEN") é aplicada em código, em [extractContainsDeclarations], porque
+  /// precisa tolerar qualquer espaçamento/quebra entre "não" e "contém".
+  static final RegExp _containsRegex = RegExp(
+    r'cont[eé]m\s+(?!tra[cç]os?\b)(?:derivados\s+de\s+)?([^.\n]{1,200})',
+    caseSensitive: false,
+  );
+
+  /// "Não contém" imediatamente antes do "contém" casado — inverte o sentido
+  /// (ausência) e não pode virar alerta de presença.
+  static final RegExp _negationBefore =
+      RegExp(r'n[aã]o\s*$', caseSensitive: false);
+
+  /// Extrai os termos de avisos precautórios ("contém traços de X" /
+  /// "pode conter X"). Retorna os termos individuais (split por vírgula/"e").
   static List<String> extractTraceWarnings(String rawText) {
     final result = <String>[];
-    final matches = _tracesRegex.allMatches(rawText);
-    for (final m in matches) {
-      final raw = (m.group(1) ?? '').trim();
-      // Divide por vírgula ou conector " e "
-      final parts = raw.split(RegExp(r',|\be\b', caseSensitive: false));
-      for (final p in parts) {
-        final cleaned = p.trim().replaceAll(RegExp(r'[\.;:\-]+$'), '').trim();
-        if (cleaned.isNotEmpty && cleaned.length < 60) {
-          result.add(cleaned);
-        }
+    for (final m in _tracesRegex.allMatches(rawText)) {
+      result.addAll(_splitAllergenList(m.group(1) ?? ''));
+    }
+    return result;
+  }
+
+  /// Extrai as declarações diretas "Contém X" do rótulo (presença efetiva).
+  /// Descarta o caso oposto e crítico "NÃO CONTÉM X" (declaração de ausência,
+  /// ex.: "NÃO CONTÉM GLÚTEN"), que jamais pode gerar alerta de presença.
+  static List<String> extractContainsDeclarations(String rawText) {
+    final result = <String>[];
+    for (final m in _containsRegex.allMatches(rawText)) {
+      final before = rawText.substring(0, m.start);
+      if (_negationBefore.hasMatch(before)) continue;
+      result.addAll(_splitAllergenList(m.group(1) ?? ''));
+    }
+    return result;
+  }
+
+  /// Quebra uma lista de alérgenos ("leite, ovos e soja") em termos limpos.
+  static List<String> _splitAllergenList(String raw) {
+    final result = <String>[];
+    final parts = raw.trim().split(RegExp(r',|\be\b', caseSensitive: false));
+    for (final p in parts) {
+      final cleaned = p.trim().replaceAll(RegExp(r'[\.;:\-]+$'), '').trim();
+      if (cleaned.isNotEmpty && cleaned.length < 60) {
+        result.add(cleaned);
       }
     }
     return result;
@@ -203,33 +240,64 @@ class TextParser {
   }) {
     final result = <TraceWarning>[];
     for (final term in traceTerms) {
-      final normalized = _normalizeForMatching(term);
-      final affected = <String>[];
-
-      for (final disorder in userDisorders) {
-        final triggers = AppConstants.problematicIngredients[disorder] ?? [];
-        for (final trigger in triggers) {
-          if (_matchesAsWord(normalized, trigger)) {
-            if (!affected.contains(disorder)) affected.add(disorder);
-            break;
-          }
-        }
-      }
-
-      for (final allergen in customAllergens) {
-        if (allergen.trim().isEmpty) continue;
-        if (_matchesAsWord(normalized, allergen)) {
-          if (!affected.contains('Alérgeno personalizado')) {
-            affected.add('Alérgeno personalizado');
-          }
-        }
-      }
-
+      final affected = _affectedBy(term, userDisorders, customAllergens);
       if (affected.isNotEmpty) {
         result.add(TraceWarning(term: _prettifyName(term), disorders: affected));
       }
     }
     return result;
+  }
+
+  /// Analisa declarações diretas "Contém X" contra o perfil. Mesma lógica de
+  /// casamento de [analyzeTraces], mas o resultado é um alerta de presença
+  /// (mais forte que traço) — ver [ContainsDeclaration].
+  static List<ContainsDeclaration> analyzeContains(
+    List<String> containsTerms,
+    List<String> userDisorders, {
+    List<String> customAllergens = const [],
+  }) {
+    final result = <ContainsDeclaration>[];
+    for (final term in containsTerms) {
+      final affected = _affectedBy(term, userDisorders, customAllergens);
+      if (affected.isNotEmpty) {
+        result.add(
+          ContainsDeclaration(term: _prettifyName(term), disorders: affected),
+        );
+      }
+    }
+    return result;
+  }
+
+  /// Distúrbios/alérgenos do perfil afetados por um termo de rótulo (usado
+  /// tanto por traços quanto por declarações diretas "Contém X").
+  static List<String> _affectedBy(
+    String term,
+    List<String> userDisorders,
+    List<String> customAllergens,
+  ) {
+    final normalized = _normalizeForMatching(term);
+    final affected = <String>[];
+
+    for (final disorder in userDisorders) {
+      final triggers = AppConstants.problematicIngredients[disorder] ?? [];
+      for (final trigger in triggers) {
+        if (_matchesAsWord(normalized, trigger)) {
+          if (!affected.contains(disorder)) affected.add(disorder);
+          break;
+        }
+      }
+    }
+
+    for (final allergen in customAllergens) {
+      if (allergen.trim().isEmpty) continue;
+      if (_matchesAsWord(normalized, allergen)) {
+        if (!affected.contains('Alérgeno personalizado')) {
+          affected.add('Alérgeno personalizado');
+        }
+      }
+    }
+
+    return affected;
   }
 
   /// Analisa ingredientes contra distúrbios + alérgenos customizados.
@@ -392,4 +460,13 @@ class TraceWarning {
   final String term;
   final List<String> disorders;
   const TraceWarning({required this.term, required this.disorders});
+}
+
+/// Declaração direta "Contém X" do rótulo, identificada como relevante ao
+/// perfil. Diferente de [TraceWarning] (traço / pode conter): representa
+/// presença declarada pelo fabricante, portanto alerta de nível mais alto.
+class ContainsDeclaration {
+  final String term;
+  final List<String> disorders;
+  const ContainsDeclaration({required this.term, required this.disorders});
 }

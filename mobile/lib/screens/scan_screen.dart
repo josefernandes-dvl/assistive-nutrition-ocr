@@ -138,6 +138,16 @@ class _ScanScreenState extends State<ScanScreen> {
         customAllergens: provider.profile.customAllergens,
       );
 
+      // 4c. Declarações diretas "Contém X" do rótulo (ex.: "CONTÉM GLÚTEN").
+      //     Presença declarada pelo fabricante — alerta mais forte que traço,
+      //     e que antes era descartada junto com o marcador de fim da lista.
+      final containsTerms = TextParser.extractContainsDeclarations(rawText);
+      final containsWarnings = TextParser.analyzeContains(
+        containsTerms,
+        provider.profile.disorders,
+        customAllergens: provider.profile.customAllergens,
+      );
+
       // 5. Cria resultado local (offline-first)
       final result = ScanResult(
         rawText: rawText,
@@ -175,6 +185,7 @@ class _ScanScreenState extends State<ScanScreen> {
           builder: (_) => ResultScreen(
             scanResult: result,
             enrichmentFuture: enrichmentFuture,
+            containsWarnings: containsWarnings,
             traceWarnings: traceWarnings,
             lowQualityOcr: outcome.isLowQuality,
           ),

@@ -146,4 +146,64 @@ void main() {
       expect(matches('Álcoois', 'alcool'), isTrue);
     });
   });
+
+  // Regressão do caso Velly (pipoca): o rótulo declara "CONTÉM GLÚTEN", mas o
+  // app só reconhecia "pode conter / traços" e descartava a declaração direta
+  // junto com o marcador de fim da lista — deixando um celíaco sem alerta.
+  group('declaração direta "Contém X" (presença efetiva)', () {
+    const rotuloVelly =
+        'INGREDIENTES: MILHO DE PIPOCA, GORDURA VEGETAL, SAL. '
+        'ALÉRGICOS: CONTÉM DERIVADOS DE SOJA. PODE CONTER LEITE E TRIGO. '
+        'CONTÉM GLÚTEN.';
+
+    test('"CONTÉM GLÚTEN" gera alerta para Doença Celíaca', () {
+      final terms = TextParser.extractContainsDeclarations(rotuloVelly);
+      final decls = TextParser.analyzeContains(terms, const ['Doença Celíaca']);
+      expect(decls, isNotEmpty);
+      expect(decls.expand((d) => d.disorders), contains('Doença Celíaca'));
+    });
+
+    test('"NÃO CONTÉM GLÚTEN" NÃO gera alerta (declaração de ausência)', () {
+      // Caso oposto e crítico: um falso positivo aqui marcaria como perigoso
+      // justamente o produto seguro para o celíaco.
+      final terms = TextParser.extractContainsDeclarations(
+        'PRODUTO SEM GLÚTEN. NÃO CONTÉM GLÚTEN.',
+      );
+      final decls = TextParser.analyzeContains(terms, const ['Doença Celíaca']);
+      expect(decls, isEmpty);
+    });
+
+    test('"CONTÉM LEITE E OVOS" afeta Intolerância à Lactose', () {
+      final terms = TextParser.extractContainsDeclarations('CONTÉM LEITE E OVOS.');
+      final decls = TextParser.analyzeContains(
+        terms,
+        const ['Intolerância à Lactose'],
+      );
+      expect(decls.expand((d) => d.disorders), contains('Intolerância à Lactose'));
+    });
+
+    test('soja declarada não alerta quem não monitora soja', () {
+      final terms =
+          TextParser.extractContainsDeclarations('CONTÉM DERIVADOS DE SOJA.');
+      final decls = TextParser.analyzeContains(terms, const ['Doença Celíaca']);
+      expect(decls, isEmpty);
+    });
+
+    test('"pode conter" e "contém traços de" seguem como traço, não presença', () {
+      expect(
+        TextParser.extractContainsDeclarations('PODE CONTER TRIGO.'),
+        isEmpty,
+      );
+      expect(
+        TextParser.extractContainsDeclarations('CONTÉM TRAÇOS DE AMENDOIM.'),
+        isEmpty,
+      );
+      // ...mas continuam sendo captados pela via de traços.
+      expect(TextParser.extractTraceWarnings('PODE CONTER TRIGO.'), isNotEmpty);
+      expect(
+        TextParser.extractTraceWarnings('CONTÉM TRAÇOS DE AMENDOIM.'),
+        isNotEmpty,
+      );
+    });
+  });
 }

@@ -12,6 +12,9 @@ import '../utils/text_parser.dart';
 import '../widgets/ingredient_card.dart';
 import '../widgets/medical_disclaimer.dart';
 
+/// Nível de severidade do resultado (RF25). Ordem crescente de gravidade.
+enum _Severity { none, attention, danger }
+
 class ResultScreen extends StatefulWidget {
   final ScanResult scanResult;
   final EnrichmentBundle? enrichment;
@@ -20,6 +23,11 @@ class ResultScreen extends StatefulWidget {
   /// resultado local já pronto e preenche produto e alérgenos oficiais quando
   /// esta Future resolve — sem bloquear a navegação esperando o backend.
   final Future<EnrichmentBundle?>? enrichmentFuture;
+
+  /// Declarações diretas "Contém X" lidas no próprio rótulo (ex.: "CONTÉM
+  /// GLÚTEN") e relevantes ao perfil — presença declarada, alerta mais forte
+  /// que os avisos de traço.
+  final List<ContainsDeclaration> containsWarnings;
   final List<TraceWarning> traceWarnings;
   final bool lowQualityOcr;
 
@@ -28,6 +36,7 @@ class ResultScreen extends StatefulWidget {
     required this.scanResult,
     this.enrichment,
     this.enrichmentFuture,
+    this.containsWarnings = const [],
     this.traceWarnings = const [],
     this.lowQualityOcr = false,
   });
@@ -45,6 +54,7 @@ class _ResultScreenState extends State<ResultScreen> {
   // para StatefulWidget.
   ScanResult get scanResult => widget.scanResult;
   EnrichmentBundle? get enrichment => _enrichment;
+  List<ContainsDeclaration> get containsWarnings => widget.containsWarnings;
   List<TraceWarning> get traceWarnings => widget.traceWarnings;
   bool get lowQualityOcr => widget.lowQualityOcr;
 
@@ -79,6 +89,7 @@ class _ResultScreenState extends State<ResultScreen> {
     if (_feedbackFired) return;
     _feedbackFired = true;
     final dangerous = widget.scanResult.flaggedIngredients.isNotEmpty ||
+        widget.containsWarnings.isNotEmpty ||
         widget.traceWarnings.isNotEmpty;
     if (!dangerous) return;
     try {
@@ -145,6 +156,13 @@ class _ResultScreenState extends State<ResultScreen> {
                     const SizedBox(height: 20),
                   ],
 
+                  // Declarações diretas "Contém X" do rótulo (presença
+                  // declarada) — mais severo que traço, vem antes.
+                  if (containsWarnings.isNotEmpty) ...[
+                    _buildContainsWarnings(containsWarnings),
+                    const SizedBox(height: 20),
+                  ],
+
                   // Avisos de "contém traços / pode conter" do rótulo
                   if (traceWarnings.isNotEmpty) ...[
                     _buildTraceWarnings(traceWarnings),
@@ -205,12 +223,30 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  /// RF25 — severidade em três níveis, considerando ingredientes sinalizados,
+  /// alérgenos oficiais e avisos de traços:
+  /// - [_Severity.danger]  presença CONFIRMADA de gatilho do perfil
+  ///   (ingrediente sinalizado, alérgeno oficial do OFF ou declaração direta
+  ///   "Contém X" no rótulo).
+  /// - [_Severity.attention]  presença apenas POSSÍVEL — avisos de traço
+  ///   ("pode conter / traços"), sem gatilho confirmado.
+  /// - [_Severity.none]  nenhuma correspondência. RN03: é ausência de
+  ///   correspondência na base atual, e não uma afirmação de segurança.
+  _Severity get _severity {
+    final confirmado = scanResult.flaggedIngredients.isNotEmpty ||
+        (enrichment?.officialAllergens.isNotEmpty ?? false) ||
+        containsWarnings.isNotEmpty;
+    if (confirmado) return _Severity.danger;
+    if (traceWarnings.isNotEmpty) return _Severity.attention;
+    return _Severity.none;
+  }
+
   Widget _buildStatusBanner() {
     final ingredientCount = scanResult.flaggedIngredients.length;
     final officialCount = enrichment?.officialAllergens.length ?? 0;
+    final containsCount = containsWarnings.length;
     final traceCount = traceWarnings.length;
-    final totalAlerts = ingredientCount + officialCount + traceCount;
-    final isDangerous = totalAlerts > 0;
+    final severity = _severity;
 
     final List<String> partes = [];
     if (ingredientCount > 0) {
@@ -219,65 +255,81 @@ class _ResultScreenState extends State<ResultScreen> {
     if (officialCount > 0) {
       partes.add('$officialCount alérgeno(s) oficial(is)');
     }
+    if (containsCount > 0) {
+      partes.add('$containsCount declarado(s) no rótulo');
+    }
     if (traceCount > 0) {
       partes.add('$traceCount aviso(s) de traços');
     }
-    final subtitle = isDangerous
-        ? partes.join(' · ')
-        : 'Nenhum problema detectado para seu perfil';
 
-    final title = isDangerous
-        ? 'Atenção! Alertas Detectados'
-        : 'Tudo Certo! Nenhum Alerta';
+    final List<Color> gradient;
+    final IconData icon;
+    final String title;
+    final String subtitle;
+    switch (severity) {
+      case _Severity.danger:
+        gradient = const [AppTheme.dangerRed, AppTheme.dangerRedText];
+        icon = Icons.warning_amber_rounded;
+        title = 'Atenção! Alertas Detectados';
+        subtitle = partes.join(' · ');
+        break;
+      case _Severity.attention:
+        // Âmbar escuro nas duas pontas do gradiente para o texto branco manter
+        // contraste em toda a faixa (RNF07).
+        gradient = const [AppTheme.accentOrangeDark, Color(0xFF7A3700)];
+        icon = Icons.info_outline;
+        title = 'Atenção: Possível Presença';
+        subtitle = partes.isEmpty
+            ? 'O rótulo indica possível presença por contaminação cruzada.'
+            : partes.join(' · ');
+        break;
+      case _Severity.none:
+        gradient = const [AppTheme.primaryGreen, AppTheme.primaryGreenDark];
+        icon = Icons.check_circle_outline;
+        title = 'Sem Correspondência para seu Perfil';
+        // RN03 — não afirmar segurança; apenas ausência de correspondência.
+        subtitle = 'Nenhum gatilho do seu perfil foi encontrado no que foi '
+            'lido. Isso não afirma que o produto é seguro.';
+        break;
+    }
+    final alertaLike = severity != _Severity.none;
 
     return Semantics(
       header: true,
       liveRegion: true,
       excludeSemantics: true,
-      label: isDangerous
-          ? 'Alerta: $title. $subtitle.'
-          : '$title. $subtitle.',
+      label: alertaLike ? 'Alerta: $title. $subtitle.' : '$title. $subtitle.',
       child: Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDangerous
-              ? [AppTheme.dangerRed, AppTheme.dangerRedText]
-              : [AppTheme.primaryGreen, AppTheme.primaryGreenDark],
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradient),
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isDangerous
-                ? Icons.warning_amber_rounded
-                : Icons.check_circle_outline,
-            color: Colors.white,
-            size: 48,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 48),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -549,6 +601,83 @@ class _ResultScreenState extends State<ResultScreen> {
       child: Text(
         'NOVA $nova · ${labels[nova] ?? ''}',
         style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildContainsWarnings(List<ContainsDeclaration> declarations) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.dangerRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.error_outline,
+                  color: AppTheme.dangerRedText, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Contém (declarado no rótulo)',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppTheme.dangerRedText),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'O fabricante declara a presença destes itens no produto — não é '
+            'apenas traço. Evite se algum afetar seu perfil.',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          ...declarations.map((d) => Semantics(
+                label: 'Contém ${d.term}. Afeta: ${d.disorders.join(", ")}.',
+                excludeSemantics: true,
+                container: true,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• ',
+                          style: TextStyle(
+                              color: AppTheme.dangerRedText,
+                              fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: d.term,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: AppTheme.dangerRedText),
+                              ),
+                              TextSpan(
+                                text: '  (${d.disorders.join(", ")})',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
+        ],
       ),
     );
   }
@@ -869,7 +998,9 @@ class _ResultScreenState extends State<ResultScreen> {
               icon: Icons.check_circle,
               value:
                   '${scanResult.totalIngredients - scanResult.flaggedIngredients.length}',
-              label: 'Seguros',
+              // RN03 — "sem alerta" ≠ "seguro": rótulo de ausência de
+              // correspondência, não de segurança.
+              label: 'Sem alerta',
               color: AppTheme.safeGreenText,
             ),
             Container(width: 1, height: 40, color: Colors.grey.shade300),

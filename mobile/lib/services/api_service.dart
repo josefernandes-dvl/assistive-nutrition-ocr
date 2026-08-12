@@ -4,8 +4,6 @@ import 'dart:io' show SocketException;
 import 'package:http/http.dart' as http;
 import '../core/api_config.dart';
 import '../models/enriched_analysis.dart';
-import '../models/scan_result.dart';
-import '../models/user_profile.dart';
 
 /// Cliente HTTP do backend NutriScan.
 ///
@@ -90,75 +88,6 @@ class ApiService {
       }
     } catch (_) {
       // Falha silenciosa — modo offline
-    }
-    return null;
-  }
-
-  // === Scan Results ===
-
-  static Future<ScanResult> saveScanResult(ScanResult result) async {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/scans'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(result.toJson()),
-        )
-        .timeout(const Duration(seconds: 20));
-
-    if (response.statusCode == 201) {
-      return ScanResult.fromJson(
-        json.decode(response.body) as Map<String, dynamic>,
-      );
-    }
-    throw _friendlyError(response.statusCode, response.body);
-  }
-
-  static Future<List<ScanResult>> getScanHistory() async {
-    final response = await http
-        .get(Uri.parse('$baseUrl/scans'))
-        .timeout(const Duration(seconds: 20));
-
-    if (response.statusCode == 200) {
-      final list = json.decode(response.body) as List<dynamic>;
-      return list
-          .map((e) => ScanResult.fromJson(e as Map<String, dynamic>))
-          .toList();
-    }
-    throw _friendlyError(response.statusCode, response.body);
-  }
-
-  // === User Profile ===
-
-  static Future<UserProfile> saveProfile(UserProfile profile) async {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/profiles'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(profile.toJson()),
-        )
-        .timeout(const Duration(seconds: 20));
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return UserProfile.fromJson(
-        json.decode(response.body) as Map<String, dynamic>,
-      );
-    }
-    throw _friendlyError(response.statusCode, response.body);
-  }
-
-  static Future<UserProfile?> getProfile() async {
-    try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/profiles/current'))
-          .timeout(const Duration(seconds: 20));
-
-      if (response.statusCode == 200) {
-        return UserProfile.fromJson(
-          json.decode(response.body) as Map<String, dynamic>,
-        );
-      }
-    } catch (_) {
-      // Backend offline — funciona no modo local
     }
     return null;
   }

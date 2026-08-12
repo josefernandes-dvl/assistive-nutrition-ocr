@@ -184,8 +184,10 @@ void main() {
 
       final primeiroAlerta =
           announced.indexWhere((t) => t.startsWith('Alerta: Farinha'));
-      final primeiroSeguro =
-          announced.indexWhere((t) => t.startsWith('Sem alerta:'));
+      // Ignora a estatística de resumo ("Sem alerta: 2"): queremos o primeiro
+      // ingrediente sem alerta (nome começa com letra, não com dígito).
+      final primeiroSeguro = announced
+          .indexWhere((t) => RegExp(r'^Sem alerta: [A-Za-zÀ-ÿ]').hasMatch(t));
       expect(primeiroAlerta, isNonNegative);
       expect(primeiroSeguro, isNonNegative);
       expect(primeiroAlerta, lessThan(primeiroSeguro));
@@ -200,7 +202,7 @@ void main() {
       final announced = semanticsNodesInOrder(tester).map(announcedText);
       expect(announced.any((t) => t == 'Total: 4'), isTrue);
       expect(announced.any((t) => t == 'Alertas: 2'), isTrue);
-      expect(announced.any((t) => t == 'Seguros: 2'), isTrue);
+      expect(announced.any((t) => t == 'Sem alerta: 2'), isTrue);
       handle.dispose();
     });
 

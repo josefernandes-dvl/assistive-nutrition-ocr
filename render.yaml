@@ -3,7 +3,6 @@
 #   1. Push deste arquivo para o GitHub.
 #   2. No Render: New → Blueprint → conecte o repositório.
 #   3. Render lê este arquivo e provisiona o serviço.
-#   4. Adicione MONGO_URI nas env vars (via Atlas, ver docs/DEPLOY.md).
 #
 # Free tier: 0,1 CPU / 512MB RAM / sleep após 15min sem requests.
 # Cold start (~30s) volta ao normal depois.
@@ -24,6 +23,3 @@ services:
         value: production
       - key: NODE_VERSION
         value: "20"
-      # MONGO_URI será adicionada manualmente no painel Render (segredo).
-      # Sem ela, /api/scans e /api/profiles ficam indisponíveis mas
-      # /api/ocr e /api/products funcionam normalmente.

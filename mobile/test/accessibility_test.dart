@@ -201,7 +201,8 @@ void main() {
 
       final announced = semanticsNodesInOrder(tester).map(announcedText);
       expect(announced.any((t) => t == 'Total: 4'), isTrue);
-      expect(announced.any((t) => t == 'Alertas: 2'), isTrue);
+      // 2 ingredientes sinalizados + 1 aviso de traço = 3 alertas no total.
+      expect(announced.any((t) => t == 'Alertas: 3'), isTrue);
       expect(announced.any((t) => t == 'Sem alerta: 2'), isTrue);
       handle.dispose();
     });

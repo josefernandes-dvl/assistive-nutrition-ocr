@@ -147,6 +147,40 @@ void main() {
     });
   });
 
+  // Regressão do pão Pullman (foto deitada): o OCR perdeu o prefixo
+  // "Ingredientes:" e o rodapé do fabricante (endereço, CNPJ) foi extraído como
+  // ingrediente ("Rua Érico Veríssimo", "Jardim Cambará").
+  group('metadados do rótulo não viram ingredientes', () {
+    test('endereço, CNPJ e registro do fabricante são descartados', () {
+      final r = TextParser.extractIngredientNames(
+        'Fabricado em BIMBO DO BRASIL LTDA. 100 (SP1) NP: 35402 759 0001-85 - '
+        'Rua Érico Veríssimo, 342, Jardim Cambará, CEP 05560-900.',
+      );
+      final joined = r.join(' | ').toLowerCase();
+      expect(joined.contains('rua'), isFalse);
+      expect(joined.contains('jardim'), isFalse);
+      expect(joined.contains('ltda'), isFalse);
+      expect(joined.contains('cep'), isFalse);
+      expect(joined.contains('35402') || joined.contains('verissimo'), isFalse);
+    });
+
+    test('ingredientes reais (e código INS de aditivo) não são descartados',
+        () {
+      final r = TextParser.extractIngredientNames(
+        'INGREDIENTES: FARINHA DE TRIGO ENRIQUECIDA COM FERRO E ÁCIDO FÓLICO, '
+        'AÇÚCAR, ÓLEO VEGETAL DE GIRASSOL, GLÚTEN, SAL, PROTEÍNA VEGETAL, '
+        'AMIDO MODIFICADO (INS 1442), CONSERVADOR BENZOATO DE SÓDIO.',
+      );
+      final joined = r.join(' | ').toLowerCase();
+      expect(joined.contains('trigo'), isTrue);
+      expect(joined.contains('glúten') || joined.contains('gluten'), isTrue);
+      // "AMIDO MODIFICADO (INS 1442)" — o INS de 4 dígitos não pode ser tratado
+      // como metadado; o ingrediente sobrevive.
+      expect(joined.contains('amido'), isTrue);
+      expect(r.length, greaterThanOrEqualTo(6));
+    });
+  });
+
   // Regressão do caso Velly (pipoca): o rótulo declara "CONTÉM GLÚTEN", mas o
   // app só reconhecia "pode conter / traços" e descartava a declaração direta
   // junto com o marcador de fim da lista — deixando um celíaco sem alerta.

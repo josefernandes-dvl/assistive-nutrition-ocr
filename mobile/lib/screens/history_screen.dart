@@ -82,7 +82,11 @@ class HistoryScreen extends StatelessWidget {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ResultScreen(scanResult: scan),
+                        builder: (_) => ResultScreen(
+                          scanResult: scan,
+                          traceWarnings: scan.traceWarnings,
+                          containsWarnings: scan.containsDeclarations,
+                        ),
                       ),
                     ),
                     child: Padding(

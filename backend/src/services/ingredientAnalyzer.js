@@ -27,15 +27,23 @@ function analyze({
   //  - Se o usuário enviou uma lista (vinda do OCR), prefere ela — está no idioma
   //    do usuário e os triggers PT-BR só funcionam nele.
   //  - Se o usuário não enviou ingredientes (fluxo barcode-puro), cai na lista da OFF
-  //    como fallback. A correlação por allergens_tags ainda cobre os principais alérgenos.
+  //    como fallback. Preferimos o array estruturado (`ingredients_list`); se ele
+  //    vier vazio — comum em produtos brasileiros — ainda tentamos partir o texto
+  //    livre (`ingredients_text`) em itens, para não devolver "0 ingredientes"
+  //    quando a OFF tem a lista só como texto.
   let sourceIngredients = ingredients;
-  if (
-    (!ingredients || ingredients.length === 0) &&
-    product &&
-    Array.isArray(product.ingredients_list) &&
-    product.ingredients_list.length > 0
-  ) {
-    sourceIngredients = product.ingredients_list;
+  if ((!ingredients || ingredients.length === 0) && product) {
+    if (
+      Array.isArray(product.ingredients_list) &&
+      product.ingredients_list.length > 0
+    ) {
+      sourceIngredients = product.ingredients_list;
+    } else if (
+      typeof product.ingredients_text === 'string' &&
+      product.ingredients_text.trim()
+    ) {
+      sourceIngredients = splitIngredientsText(product.ingredients_text);
+    }
   }
 
   const analyzed = sourceIngredients.map((name) =>
@@ -45,12 +53,18 @@ function analyze({
   // Alertas vindos das allergens_tags oficiais (OFF) que casam com perfil
   const officialAllergens = mapOfficialAllergens(product, disorders);
 
+  // Traços declarados pela OFF (traces_tags): presença POSSÍVEL por contaminação
+  // cruzada. Costumam existir mesmo quando a lista de ingredientes não foi
+  // cadastrada — então recuperam alertas que, de outro modo, se perderiam.
+  const officialTraces = mapOfficialTraces(product, disorders);
+
   const flagged = analyzed.filter((i) => i.is_flagged);
 
   return {
     ingredients: analyzed,
     flagged_ingredients: flagged,
     official_allergens: officialAllergens, // ex.: ["en:milk", "en:gluten"]
+    official_traces: officialTraces, // traços oficiais (OFF traces_tags)
     summary: {
       total: analyzed.length,
       flagged: flagged.length,
@@ -118,6 +132,49 @@ function mapOfficialAllergens(product, disorders) {
     }
   }
   return matched;
+}
+
+function mapOfficialTraces(product, disorders) {
+  if (!product || !Array.isArray(product.traces_tags)) return [];
+  const matched = [];
+  for (const tag of product.traces_tags) {
+    const associated = offAllergenToDisorders[tag] || [];
+    const relevant = associated.filter((d) => disorders.includes(d));
+    if (relevant.length) {
+      matched.push({ tag, disorders: relevant });
+    }
+  }
+  return matched;
+}
+
+/**
+ * Parte o texto livre de ingredientes da OFF (`ingredients_text`) numa lista de
+ * itens. Fallback para quando o array estruturado (`ingredients`) não foi
+ * cadastrado. Separa apenas nas vírgulas/;/quebras de linha de nível superior —
+ * vírgulas dentro de parênteses (ex.: "farinha (trigo 34,8 %)") ficam no item.
+ */
+function splitIngredientsText(text) {
+  const s = String(text || '');
+  const parts = [];
+  let depth = 0;
+  let buf = '';
+  for (const ch of s) {
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+
+    if ((ch === ',' || ch === ';' || ch === '\n') && depth === 0) {
+      if (buf.trim()) parts.push(buf.trim());
+      buf = '';
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf.trim()) parts.push(buf.trim());
+
+  return parts
+    .map((p) => p.replace(/\.+$/, '').trim())
+    // Descarta fragmentos sem letra (números, percentuais soltos, pontuação).
+    .filter((p) => p && /[a-zà-ÿ]/i.test(p));
 }
 
 function severityOf(flaggedCount, officialCount) {
@@ -212,4 +269,10 @@ function prettify(s) {
     .join(' ');
 }
 
-module.exports = { analyze, matchesAsWord, inflectionForms, normalize };
+module.exports = {
+  analyze,
+  matchesAsWord,
+  inflectionForms,
+  normalize,
+  splitIngredientsText,
+};

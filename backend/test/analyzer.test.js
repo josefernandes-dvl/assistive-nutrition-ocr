@@ -70,6 +70,68 @@ test('quando usuário não envia ingredientes, usa os do produto (fallback)', ()
   assert.equal(r.summary.flagged, 1);
 });
 
+// Regressão do fluxo de código de barras: muitos produtos brasileiros na OFF
+// têm o texto de ingredientes (`ingredients_text`) mas não o array estruturado
+// (`ingredients`). Sem o fallback abaixo, a análise devolvia "0 ingredientes /
+// 0 alertas" mesmo com a lista disponível como texto.
+test('fallback para ingredients_text quando o array estruturado vem vazio', () => {
+  const r = analyze({
+    ingredients: [],
+    disorders: ['Doença Celíaca'],
+    product: {
+      ingredients_list: [],
+      ingredients_text: 'Farinha de trigo, açúcar, sal, fermento.',
+      allergens_tags: [],
+    },
+  });
+  assert.equal(r.summary.total, 4);
+  assert.equal(r.summary.flagged, 1);
+  assert.match(r.flagged_ingredients[0].flag_reason, /trigo/i);
+});
+
+test('split de ingredients_text ignora vírgula dentro de parênteses', () => {
+  const { splitIngredientsText } = require('../src/services/ingredientAnalyzer');
+  const parts = splitIngredientsText(
+    'Cereal (farinha de trigo 34,8 %, farinha integral), açúcar, óleo vegetal.'
+  );
+  assert.deepEqual(parts, [
+    'Cereal (farinha de trigo 34,8 %, farinha integral)',
+    'açúcar',
+    'óleo vegetal',
+  ]);
+});
+
+test('produto sem ingredientes nem alérgenos → análise vazia (sem falso "seguro")', () => {
+  const r = analyze({
+    ingredients: [],
+    disorders: ['Doença Celíaca'],
+    product: {
+      ingredients_list: [],
+      ingredients_text: '',
+      allergens_tags: [],
+      traces_tags: [],
+    },
+  });
+  assert.equal(r.summary.total, 0);
+  assert.equal(r.official_allergens.length, 0);
+  assert.equal(r.official_traces.length, 0);
+});
+
+test('traces_tags da OFF viram traços oficiais que afetam o perfil', () => {
+  const r = analyze({
+    ingredients: [],
+    disorders: ['Alergia ao Ovo', 'Doença Celíaca'],
+    product: {
+      ingredients_list: [],
+      allergens_tags: [],
+      traces_tags: ['en:eggs', 'en:peanuts'], // amendoim não está no perfil
+    },
+  });
+  const tags = r.official_traces.map((t) => t.tag);
+  assert.deepEqual(tags, ['en:eggs']);
+  assert.deepEqual(r.official_traces[0].disorders, ['Alergia ao Ovo']);
+});
+
 test('mapeia allergens_tags da OFF para distúrbios do perfil', () => {
   const r = analyze({
     ingredients: ['Açúcar'],

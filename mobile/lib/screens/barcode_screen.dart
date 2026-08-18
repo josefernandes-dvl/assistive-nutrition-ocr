@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/enriched_analysis.dart';
+import '../models/label_warning.dart';
 import '../models/scan_result.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
@@ -91,10 +92,25 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
         return;
       }
 
+      // Traços oficiais da OFF (traces_tags) viram avisos de "pode conter".
+      final traceWarnings = analysis.officialTraces
+          .map((a) => TraceWarning(term: a.prettyName, disorders: a.disorders))
+          .toList();
+
+      // A OFF tem o produto (nome/nutrientes), mas pode não ter a lista de
+      // ingredientes nem alérgenos cadastrados — comum em produtos brasileiros.
+      // Sem sinalizar isso, a tela abriria verde ("sem correspondência"),
+      // passando falsa sensação de segurança. RN03: ausência de dados não é
+      // ausência de risco.
+      final semDadosDeIngredientes = analysis.ingredients.isEmpty &&
+          analysis.officialAllergens.isEmpty &&
+          traceWarnings.isEmpty;
+
       final result = ScanResult(
         rawText: analysis.product!.name ?? 'Produto $cleaned',
         ingredients: analysis.ingredients,
         flaggedIngredients: analysis.flaggedIngredients,
+        traceWarnings: traceWarnings,
       );
 
       provider.addScanResult(result);
@@ -109,6 +125,8 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
               officialAllergens: analysis.officialAllergens,
               product: analysis.product,
             ),
+            traceWarnings: traceWarnings,
+            noIngredientData: semDadosDeIngredientes,
           ),
         ),
       );

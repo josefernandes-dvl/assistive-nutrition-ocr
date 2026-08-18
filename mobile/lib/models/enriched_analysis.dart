@@ -6,6 +6,11 @@ class EnrichedAnalysis {
   final List<Ingredient> ingredients;
   final List<Ingredient> flaggedIngredients;
   final List<OfficialAllergen> officialAllergens;
+
+  /// Traços oficiais da Open Food Facts (`traces_tags`) que afetam o perfil —
+  /// presença POSSÍVEL (contaminação cruzada). Costumam existir mesmo quando a
+  /// lista de ingredientes do produto não foi cadastrada na OFF.
+  final List<OfficialAllergen> officialTraces;
   final AnalysisSummary summary;
   final ProductInfo? product;
 
@@ -13,6 +18,7 @@ class EnrichedAnalysis {
     required this.ingredients,
     required this.flaggedIngredients,
     required this.officialAllergens,
+    this.officialTraces = const [],
     required this.summary,
     this.product,
   });
@@ -26,6 +32,9 @@ class EnrichedAnalysis {
           .map((e) => Ingredient.fromJson(e as Map<String, dynamic>))
           .toList(),
       officialAllergens: (json['official_allergens'] as List<dynamic>? ?? [])
+          .map((e) => OfficialAllergen.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      officialTraces: (json['official_traces'] as List<dynamic>? ?? [])
           .map((e) => OfficialAllergen.fromJson(e as Map<String, dynamic>))
           .toList(),
       summary: AnalysisSummary.fromJson(

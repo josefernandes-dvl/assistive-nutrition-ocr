@@ -31,6 +31,12 @@ class ResultScreen extends StatefulWidget {
   final List<TraceWarning> traceWarnings;
   final bool lowQualityOcr;
 
+  /// Fluxo de código de barras: a Open Food Facts tem o produto, mas não tem a
+  /// lista de ingredientes nem alérgenos dele. Nesse caso não há o que analisar,
+  /// e a tela precisa dizer isso — em vez de mostrar um verde "sem
+  /// correspondência" que passaria falsa sensação de segurança (RN03).
+  final bool noIngredientData;
+
   const ResultScreen({
     super.key,
     required this.scanResult,
@@ -39,6 +45,7 @@ class ResultScreen extends StatefulWidget {
     this.containsWarnings = const [],
     this.traceWarnings = const [],
     this.lowQualityOcr = false,
+    this.noIngredientData = false,
   });
 
   @override
@@ -57,6 +64,7 @@ class _ResultScreenState extends State<ResultScreen> {
   List<ContainsDeclaration> get containsWarnings => widget.containsWarnings;
   List<TraceWarning> get traceWarnings => widget.traceWarnings;
   bool get lowQualityOcr => widget.lowQualityOcr;
+  bool get noIngredientData => widget.noIngredientData;
 
   @override
   void initState() {
@@ -169,38 +177,45 @@ class _ResultScreenState extends State<ResultScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  _buildSummaryCard(),
-                  const SizedBox(height: 20),
-
-                  if (scanResult.flaggedIngredients.isNotEmpty) ...[
-                    _buildWhyCareSection(scanResult.flaggedIngredients),
+                  // Sem lista de ingredientes da OFF não há resumo nem lista a
+                  // mostrar — só o aviso honesto de que não deu para analisar.
+                  if (noIngredientData) ...[
+                    _buildNoDataNotice(),
                     const SizedBox(height: 20),
+                  ] else ...[
+                    _buildSummaryCard(),
+                    const SizedBox(height: 20),
+
+                    if (scanResult.flaggedIngredients.isNotEmpty) ...[
+                      _buildWhyCareSection(scanResult.flaggedIngredients),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Ingredientes com Alerta',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.dangerRedText,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...scanResult.flaggedIngredients.map(
+                        (i) => IngredientCard(ingredient: i),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     const Text(
-                      'Ingredientes com Alerta',
+                      'Todos os Ingredientes Detectados',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.dangerRedText,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...scanResult.flaggedIngredients.map(
+                    ...scanResult.ingredients.map(
                       (i) => IngredientCard(ingredient: i),
                     ),
-                    const SizedBox(height: 20),
                   ],
-
-                  const Text(
-                    'Todos os Ingredientes Detectados',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...scanResult.ingredients.map(
-                    (i) => IngredientCard(ingredient: i),
-                  ),
 
                   const SizedBox(height: 20),
                   _buildRawTextSection(),
@@ -284,12 +299,23 @@ class _ResultScreenState extends State<ResultScreen> {
             : partes.join(' · ');
         break;
       case _Severity.none:
-        gradient = const [AppTheme.primaryGreen, AppTheme.primaryGreenDark];
-        icon = Icons.check_circle_outline;
-        title = 'Sem Correspondência para seu Perfil';
-        // RN03 — não afirmar segurança; apenas ausência de correspondência.
-        subtitle = 'Nenhum gatilho do seu perfil foi encontrado no que foi '
-            'lido. Isso não afirma que o produto é seguro.';
+        if (noIngredientData) {
+          // Produto existe na OFF, mas sem lista de ingredientes/alérgenos:
+          // não é "sem correspondência", é "não deu para analisar". Âmbar, não
+          // verde — para não sugerir segurança.
+          gradient = const [AppTheme.accentOrangeDark, Color(0xFF7A3700)];
+          icon = Icons.help_outline;
+          title = 'Produto não analisado';
+          subtitle = 'A Open Food Facts não tem a lista de ingredientes deste '
+              'produto. Escaneie o rótulo (foto) para verificar os alérgenos.';
+        } else {
+          gradient = const [AppTheme.primaryGreen, AppTheme.primaryGreenDark];
+          icon = Icons.check_circle_outline;
+          title = 'Sem Correspondência para seu Perfil';
+          // RN03 — não afirmar segurança; apenas ausência de correspondência.
+          subtitle = 'Nenhum gatilho do seu perfil foi encontrado no que foi '
+              'lido. Isso não afirma que o produto é seguro.';
+        }
         break;
     }
     final alertaLike = severity != _Severity.none;
@@ -933,6 +959,53 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  /// Fluxo de código de barras sem lista de ingredientes na OFF. Explica por
+  /// que não há alertas e encaminha para a análise por foto do rótulo.
+  Widget _buildNoDataNotice() {
+    return Semantics(
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.warningYellow.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border:
+              Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.5)),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.search_off, color: AppTheme.accentOrangeDark, size: 22),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sem lista de ingredientes para este produto',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppTheme.accentOrangeDark),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'A Open Food Facts identificou o produto, mas não tem a lista '
+                    'de ingredientes nem os alérgenos dele cadastrados. Por isso '
+                    'não foi possível procurar gatilhos do seu perfil — isso não '
+                    'significa que o produto seja seguro. Para analisar, volte e '
+                    'use "Analisar Rótulo" fotografando a lista de ingredientes.',
+                    style: TextStyle(fontSize: 12, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildOfficialAllergens(List<OfficialAllergen> allergens) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -980,6 +1053,16 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildSummaryCard() {
+    // "Alertas" conta TODOS os itens de alerta da tela — ingredientes
+    // sinalizados, alérgenos oficiais, declarações diretas "Contém" e avisos
+    // de traço. Antes contava só os ingredientes, então uma declaração
+    // "CONTÉM X" (que gera o quadro vermelho) deixava o número em 0, dando
+    // falsa sensação de segurança.
+    final int alertasTotais = scanResult.flaggedIngredients.length +
+        containsWarnings.length +
+        (enrichment?.officialAllergens.length ?? 0) +
+        traceWarnings.length;
+
     return Card(
       elevation: 1,
       child: Padding(
@@ -990,6 +1073,8 @@ class _ResultScreenState extends State<ResultScreen> {
             _buildStat(
               icon: Icons.list_alt,
               value: '${scanResult.totalIngredients}',
+              // "Total" = ingredientes detectados (os dois primeiros quadros
+              // são sobre a lista; "Alertas" abaixo soma todas as categorias).
               label: 'Total',
               color: AppTheme.primaryGreen,
             ),
@@ -998,15 +1083,15 @@ class _ResultScreenState extends State<ResultScreen> {
               icon: Icons.check_circle,
               value:
                   '${scanResult.totalIngredients - scanResult.flaggedIngredients.length}',
-              // RN03 — "sem alerta" ≠ "seguro": rótulo de ausência de
-              // correspondência, não de segurança.
+              // RN03 — "sem alerta" ≠ "seguro": conta ingredientes sem gatilho,
+              // não é afirmação de segurança do produto.
               label: 'Sem alerta',
               color: AppTheme.safeGreenText,
             ),
             Container(width: 1, height: 40, color: Colors.grey.shade300),
             _buildStat(
               icon: Icons.warning,
-              value: '${scanResult.flaggedIngredients.length}',
+              value: '$alertasTotais',
               label: 'Alertas',
               color: AppTheme.dangerRedText,
             ),

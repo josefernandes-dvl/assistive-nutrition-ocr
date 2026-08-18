@@ -1,6 +1,11 @@
 import '../core/constants.dart';
 import '../core/ingredient_dictionary.dart';
 import '../models/ingredient.dart';
+import '../models/label_warning.dart';
+
+// Reexporta os tipos de alerta de rótulo para que quem importa o analisador
+// continue enxergando TraceWarning/ContainsDeclaration sem novo import.
+export '../models/label_warning.dart';
 
 class TextParser {
   static final RegExp _prefixRegex = RegExp(
@@ -117,8 +122,10 @@ class TextParser {
     //    como um único token (ex.: "estabilizantes (INS 412, INS 415)").
     final parts = _splitRespectingParens(text);
 
-    // 5. Limpa cada parte
+    // 5. Descarta metadados do rótulo (endereço/CNPJ/registro do fabricante)
+    //    e então limpa cada parte.
     final cleaned = parts
+        .where((p) => !_looksLikeMetadata(p))
         .map(_cleanIngredientName)
         .where(_isLikelyIngredient)
         .toList();
@@ -217,6 +224,27 @@ class TextParser {
     // Remove pontuação de borda
     s = s.replaceAll(RegExp(r'^[\-:;,\.\s]+|[\-:;,\.\s]+$'), '').trim();
     return s;
+  }
+
+  /// Sinais de que o candidato é METADADO do rótulo (endereço do fabricante,
+  /// CNPJ, CEP, registro) e não um ingrediente. Um ingrediente jamais carrega
+  /// CNPJ, "Rua", "CEP", "Lote" nem uma sequência de 4+ dígitos.
+  ///
+  /// Sem isto, em rótulos densos — e sobretudo em fotos deitadas, onde o OCR
+  /// embaralha a ordem e perde o prefixo "Ingredientes:" — o rodapé do
+  /// fabricante era extraído como ingrediente (ex.: "Rua Érico Veríssimo",
+  /// "Jardim Cambará", o CNPJ).
+  // 5+ dígitos seguidos (CNPJ/CEP/telefone). Fica acima dos 3–4 dígitos dos
+  // códigos INS de aditivo (ex.: "INS 1442"), que são ingredientes legítimos.
+  static final RegExp _metaDigits = RegExp(r'\d{5}');
+  static final RegExp _metaKeywords = RegExp(
+    r'\b(cnpj|cnpi|ltda|epp|rua|avenida|rodovia|bairro|cep|jardim|lote|lotes|'
+    r'distrito|industria|fabricad\w*|distribu[ií]\w*|sac|np|polo)\b',
+  );
+
+  static bool _looksLikeMetadata(String raw) {
+    final s = _normalizeForMatching(raw);
+    return _metaDigits.hasMatch(s) || _metaKeywords.hasMatch(s);
   }
 
   static bool _isLikelyIngredient(String s) {
@@ -455,18 +483,5 @@ class TextParser {
   }
 }
 
-/// Aviso de "contém traços / pode conter" identificado como relevante para o perfil.
-class TraceWarning {
-  final String term;
-  final List<String> disorders;
-  const TraceWarning({required this.term, required this.disorders});
-}
-
-/// Declaração direta "Contém X" do rótulo, identificada como relevante ao
-/// perfil. Diferente de [TraceWarning] (traço / pode conter): representa
-/// presença declarada pelo fabricante, portanto alerta de nível mais alto.
-class ContainsDeclaration {
-  final String term;
-  final List<String> disorders;
-  const ContainsDeclaration({required this.term, required this.disorders});
-}
+// TraceWarning e ContainsDeclaration agora vivem em models/label_warning.dart
+// (reexportados acima), porque passaram a ser persistidos com o ScanResult.

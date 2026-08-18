@@ -106,10 +106,39 @@ class _ScanScreenState extends State<ScanScreen> {
       final cleanText = TextParser.cleanOcrText(rawText);
       final ingredientNames = TextParser.extractIngredientNames(cleanText);
 
-      // Só bloqueia quando o parser não conseguiu extrair nenhum ingrediente.
-      // Quando há resultado mas a qualidade está baixa, a análise segue e o
-      // ResultScreen exibe um aviso amarelo recomendando verificação manual.
-      if (ingredientNames.isEmpty) {
+      // 3. Analisa ingredientes contra o perfil do usuário
+      final ingredients = TextParser.analyzeIngredients(
+        ingredientNames,
+        provider.profile.disorders,
+        customAllergens: provider.profile.customAllergens,
+      );
+      final flagged = ingredients.where((i) => i.isFlagged).toList();
+
+      // 4. Avisos de "contém traços de / pode conter" relevantes para o perfil.
+      final traceTerms = TextParser.extractTraceWarnings(rawText);
+      final traceWarnings = TextParser.analyzeTraces(
+        traceTerms,
+        provider.profile.disorders,
+        customAllergens: provider.profile.customAllergens,
+      );
+
+      // 5. Declarações diretas "Contém X" do rótulo (ex.: "CONTÉM GLÚTEN").
+      //     Presença declarada pelo fabricante — alerta mais forte que traço.
+      final containsTerms = TextParser.extractContainsDeclarations(rawText);
+      final containsWarnings = TextParser.analyzeContains(
+        containsTerms,
+        provider.profile.disorders,
+        customAllergens: provider.profile.customAllergens,
+      );
+
+      // 6. Só bloqueia quando NÃO há nada a mostrar — nem ingrediente lido, nem
+      //    aviso de traço, nem declaração "contém". Assim, mesmo que o OCR
+      //    falhe em ler a LISTA (rótulo denso, foto deitada), um "CONTÉM
+      //    GLÚTEN" declarado ainda vira alerta, em vez de o app perder essa
+      //    informação crítica de segurança.
+      if (ingredientNames.isEmpty &&
+          traceWarnings.isEmpty &&
+          containsWarnings.isEmpty) {
         setState(() {
           _errorMessage =
               'Não foi possível identificar ingredientes na imagem. Tente '
@@ -120,39 +149,14 @@ class _ScanScreenState extends State<ScanScreen> {
         return;
       }
 
-      // 3. Analisa ingredientes contra o perfil do usuário
-      final ingredients = TextParser.analyzeIngredients(
-        ingredientNames,
-        provider.profile.disorders,
-        customAllergens: provider.profile.customAllergens,
-      );
-
-      // 4. Separa ingredientes flagged
-      final flagged = ingredients.where((i) => i.isFlagged).toList();
-
-      // 4b. Avisos de "contém traços de / pode conter" relevantes para o perfil
-      final traceTerms = TextParser.extractTraceWarnings(rawText);
-      final traceWarnings = TextParser.analyzeTraces(
-        traceTerms,
-        provider.profile.disorders,
-        customAllergens: provider.profile.customAllergens,
-      );
-
-      // 4c. Declarações diretas "Contém X" do rótulo (ex.: "CONTÉM GLÚTEN").
-      //     Presença declarada pelo fabricante — alerta mais forte que traço,
-      //     e que antes era descartada junto com o marcador de fim da lista.
-      final containsTerms = TextParser.extractContainsDeclarations(rawText);
-      final containsWarnings = TextParser.analyzeContains(
-        containsTerms,
-        provider.profile.disorders,
-        customAllergens: provider.profile.customAllergens,
-      );
-
-      // 5. Cria resultado local (offline-first)
+      // 7. Cria resultado local (offline-first). Traços e declarações diretas
+      //    entram no registro para sobreviverem ao histórico (RF14).
       final result = ScanResult(
         rawText: rawText,
         ingredients: ingredients,
         flaggedIngredients: flagged,
+        traceWarnings: traceWarnings,
+        containsDeclarations: containsWarnings,
         imagePath: _selectedImage!.path,
       );
 

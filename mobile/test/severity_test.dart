@@ -2,6 +2,7 @@
 /// reflete cada um por cor/texto no banner. RN03 — o nível mais baixo é
 /// "ausência de correspondência", e não uma afirmação de segurança.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/models/scan_result.dart';
 import 'package:mobile/screens/result_screen.dart';
 import 'package:mobile/utils/text_parser.dart';
 
@@ -58,5 +59,37 @@ void main() {
       find.textContaining('não afirma que o produto é seguro'),
       findsOneWidget,
     );
+  });
+
+  // Fluxo de código de barras: a OFF tem o produto mas não a lista de
+  // ingredientes/alérgenos. Não pode virar um verde "sem correspondência" —
+  // seria falso "seguro". Deve dizer, em âmbar, que não deu para analisar.
+  testWidgets('PRODUTO NÃO ANALISADO quando a OFF não tem ingredientes',
+      (tester) async {
+    useMobileSurface(tester);
+    final provider = await memoryProvider(profile: celiacProfile);
+    final semDados = ScanResult(
+      rawText: 'Refrigerante Cola 2L',
+      ingredients: const [],
+      flaggedIngredients: const [],
+    );
+    await tester.pumpWidget(wrapApp(
+      ResultScreen(scanResult: semDados, noIngredientData: true),
+      provider: provider,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Produto não analisado'), findsOneWidget);
+    // Não pode aparecer o verde de "sem correspondência".
+    expect(find.text('Sem Correspondência para seu Perfil'), findsNothing);
+    // O resumo 0/0/0 sem sentido não é mostrado; no lugar, o aviso honesto.
+    expect(find.text('Alertas'), findsNothing);
+    expect(
+      find.textContaining('não tem a lista de ingredientes'),
+      findsWidgets,
+    );
+    // ...e nunca sugere segurança.
+    expect(find.textContaining('não significa que o produto seja seguro'),
+        findsOneWidget);
   });
 }
